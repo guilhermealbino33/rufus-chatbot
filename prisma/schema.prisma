@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Representa o Lead / Cliente que entra em contato
+model Lead {
+  id           String    @id @default(uuid())
+  phoneNumber  String    @unique // Ex: 5511999999999
+  name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  sessions     Session[]
+  tickets      Ticket[]
+  logs         MessageLog[]
+}
+
+// Representa a sessão atual do usuário no funil
+model Session {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  
+  // Estado atual na árvore de decisão (ex: "MENU_PRINCIPAL", "SUPORTE_TECNICO")
+  currentState String   
+  
+  // Dados coletados durante o fluxo (ex: { "protocolo": "123", "motivo": "financeiro" })
+  context      Json?    
+  
+  isActive     Boolean  @default(true)
+  lastInteractionAt DateTime @default(now())
+
+  @@index([leadId])
+}
+
+// Representa um atendimento humano ou finalização de fluxo
+model Ticket {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  
+  status       TicketStatus @default(OPEN)
+  category     String?      // Categoria final do atendimento
+  assignedTo   String?      // ID do atendente (se houver sistema de login)
+  
+  createdAt    DateTime @default(now())
+  closedAt     DateTime?
+}
+
+// Log de todas as mensagens trocadas para auditoria
+model MessageLog {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  
+  direction    Direction // INBOUND (Lead -> Bot) ou OUTBOUND (Bot -> Lead)
+  content      String    // Conteúdo da mensagem
+  
+  createdAt    DateTime  @default(now())
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  RESOLVED
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
