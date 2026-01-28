@@ -1,73 +1,64 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Rufus Chatbot
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Bem-vindo ao repositório do Rufus Chatbot. Este projeto visa criar um chatbot inteligente modularizado.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Backend
 
-## Description
+O backend está localizado na pasta `backend` e foi desenvolvido utilizando [NestJS](https://nestjs.com/).
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Funcionalidades Disponíveis (Backend)
 
-## Installation
+Atualmente, o backend conta com as seguintes funcionalidades implementadas:
 
-```bash
-$ npm install
-```
+#### 1. Webhook de Recebimento de Mensagens
+- **Endpoint**: `POST /webhook`
+- **Módulo**: `Chatbot`
+- **Descrição**: Rota pública para recebimento de webhooks (ex: de integrações com WhatsApp).
+- **Fluxo Atual**:
+  1. O endpoint recebe um payload JSON via `POST`.
+  2. Identifica se o evento é do tipo `message`.
+  3. Extrai o conteúdo e remetente.
+  4. Encaminha para o `ChatbotService` para processamento da lógica de resposta.
+  5. Loga no console a resposta que seria enviada (simulação de envio).
+  6. Retorna status `200 OK` rapidamente para o webhook.
 
-## Running the app
+#### 2. Arquitetura Modular
+O projeto segue uma arquitetura modular para facilitar a manutenção e escalabilidade. Os seguintes módulos já possuem estrutura inicial (Controllers/Services):
 
-```bash
-# development
-$ npm run start
+- **Chatbot Module**: 
+  - Responsável pela lógica principal de conversação e interface com o webhook.
+- **Leads Module**: 
+  - Estrutura inicial criada para futuro gerenciamento de leads capturados.
+  - Controller definido: `/leads` (Endpoints em desenvolvimento).
+- **Tickets Module**: 
+  - Estrutura inicial criada para gestão de atendimentos.
+  - Controller definido: `/tickets` (Endpoints em desenvolvimento).
+- **Users Module**: 
+  - Estrutura inicial para gestão de usuários do sistema.
+  - Controller definido: `/users` (Endpoints em desenvolvimento).
+- **Sessions Module**: 
+  - Módulo interno (sem controller exposto) focado na gestão de estados e sessões dos usuários/bots.
 
-# watch mode
-$ npm run start:dev
+### 🛠️ Como Executar o Backend
 
-# production mode
-$ npm run start:prod
-```
+Pré-requisitos: Node.js instalado.
 
-## Test
+1. Navegue até a pasta do backend:
+   ```bash
+   cd backend
+   ```
 
-```bash
-# unit tests
-$ npm run test
+2. Instale as dependências do projeto:
+   ```bash
+   npm install
+   ```
 
-# e2e tests
-$ npm run test:e2e
+3. Execute o servidor em modo de desenvolvimento (watch mode):
+   ```bash
+   npm run start:dev
+   ```
 
-# test coverage
-$ npm run test:cov
-```
+4. O servidor estará rodando em `http://localhost:3000` (porta padrão).
 
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).
+---
+*Documentação gerada automaticamente com base no estado atual do desenvolvimento.*
