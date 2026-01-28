@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { Session } from '../../sessions/entities/session.entity';
 import { Ticket } from '../../tickets/entities/ticket.entity';
-import { MessageLog } from '../../chat/entities/message-log.entity';
+import { MessageLog } from '../../chatbot/entities/message-log.entity';
 
 @Entity()
 export class Lead {
