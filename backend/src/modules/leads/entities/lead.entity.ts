@@ -1,13 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { Session } from '../../sessions/entities/session.entity';
 import { Ticket } from '../../tickets/entities/ticket.entity';
 import { MessageLog } from '../../chatbot/entities/message-log.entity';
+import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('leads')
-export class Lead {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class Lead extends BaseEntity {
     @Column({ name: 'phone', unique: true })
     phone: string;
 
@@ -26,12 +24,6 @@ export class Lead {
         default: 'new'
     })
     status: string;
-
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt: Date;
-
-    @UpdateDateColumn({ name: 'updated_at' })
-    updatedAt: Date;
 
     @OneToMany(() => Session, (session) => session.lead)
     sessions: Session[];

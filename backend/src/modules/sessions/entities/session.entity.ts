@@ -1,11 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
+import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('sessions')
-export class Session {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class Session extends BaseEntity {
     @Column({ name: 'phone' })
     phone: string;
 
@@ -22,13 +20,10 @@ export class Session {
     isActive: boolean;
 
     @Column({ name: 'lead_id' })
-    leadId: string;
+    leadId: number;
 
     @ManyToOne(() => Lead, (lead) => lead.sessions)
     @JoinColumn({ name: 'lead_id' })
     @Index()
     lead: Lead;
-
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt: Date;
 }

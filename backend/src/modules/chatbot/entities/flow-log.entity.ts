@@ -1,10 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, Column } from 'typeorm';
+import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('flow_logs')
-export class FlowLog {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class FlowLog extends BaseEntity {
     @Column()
     phone: string;
 
@@ -19,7 +17,4 @@ export class FlowLog {
 
     @Column('jsonb', { nullable: true })
     metadata: Record<string, any>;
-
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt: Date;
 }

@@ -1,12 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
 import { User } from '../../users/entities/user.entity';
+import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('tickets')
-export class Ticket {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class Ticket extends BaseEntity {
     @Column()
     subject: string;
 
@@ -28,24 +26,18 @@ export class Ticket {
     priority: string;
 
     @Column({ name: 'lead_id' })
-    leadId: string;
+    leadId: number;
 
     @ManyToOne(() => Lead, (lead) => lead.tickets)
     @JoinColumn({ name: 'lead_id' })
     lead: Lead;
 
     @Column({ name: 'assigned_to', nullable: true })
-    assignedTo: string; // Temporário até criar User Entity
+    assignedTo: number; // Temporário até criar User Entity
 
     @ManyToOne(() => User, { nullable: true })
     @JoinColumn({ name: 'assigned_to' })
     assignedToUser: User;
-
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt: Date;
-
-    @UpdateDateColumn({ name: 'updated_at' })
-    updatedAt: Date;
 
     @Column({ name: 'closed_at', nullable: true })
     closedAt: Date;

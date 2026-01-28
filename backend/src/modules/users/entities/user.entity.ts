@@ -1,11 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { Ticket } from '../../tickets/entities/ticket.entity';
+import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('users')
-export class User {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class User extends BaseEntity {
     @Column({ unique: true })
     email: string;
 
@@ -24,9 +22,6 @@ export class User {
 
     @Column({ name: 'is_active', default: true })
     isActive: boolean;
-
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt: Date;
 
     // Relacionamento inverso com Tickets (Atendente)
     @OneToMany(() => Ticket, (ticket) => ticket.assignedToUser)
