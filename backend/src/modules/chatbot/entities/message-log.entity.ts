@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
 
 export enum Direction {
@@ -6,15 +6,16 @@ export enum Direction {
     OUTBOUND = 'OUTBOUND',
 }
 
-@Entity()
+@Entity('message_logs')
 export class MessageLog {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column()
+    @Column({ name: 'lead_id' })
     leadId: string;
 
     @ManyToOne(() => Lead, (lead) => lead.logs)
+    @JoinColumn({ name: 'lead_id' })
     lead: Lead;
 
     @Column({
@@ -26,6 +27,6 @@ export class MessageLog {
     @Column('text')
     content: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
 }

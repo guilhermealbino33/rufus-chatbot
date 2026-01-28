@@ -1,40 +1,52 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
+import { User } from '../../users/entities/user.entity';
 
-export enum TicketStatus {
-    OPEN = 'OPEN',
-    IN_PROGRESS = 'IN_PROGRESS',
-    CLOSED = 'CLOSED',
-    RESOLVED = 'RESOLVED',
-}
-
-@Entity()
+@Entity('tickets')
 export class Ticket {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
     @Column()
-    leadId: string;
+    subject: string;
 
-    @ManyToOne(() => Lead, (lead) => lead.tickets)
-    lead: Lead;
+    @Column('text')
+    description: string;
 
     @Column({
         type: 'enum',
-        enum: TicketStatus,
-        default: TicketStatus.OPEN,
+        enum: ['open', 'in_progress', 'resolved', 'closed'],
+        default: 'open'
     })
-    status: TicketStatus;
+    status: string;
 
-    @Column({ nullable: true })
-    category: string;
+    @Column({
+        type: 'enum',
+        enum: ['low', 'medium', 'high', 'urgent'],
+        default: 'medium'
+    })
+    priority: string;
 
-    @Column({ nullable: true })
-    assignedTo: string;
+    @Column({ name: 'lead_id' })
+    leadId: string;
 
-    @CreateDateColumn()
+    @ManyToOne(() => Lead, (lead) => lead.tickets)
+    @JoinColumn({ name: 'lead_id' })
+    lead: Lead;
+
+    @Column({ name: 'assigned_to', nullable: true })
+    assignedTo: string; // Temporário até criar User Entity
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'assigned_to' })
+    assignedToUser: User;
+
+    @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
 
-    @Column({ nullable: true })
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
+
+    @Column({ name: 'closed_at', nullable: true })
     closedAt: Date;
 }

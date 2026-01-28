@@ -7,6 +7,7 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     LeadsModule,
     SessionsModule,
     TicketsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

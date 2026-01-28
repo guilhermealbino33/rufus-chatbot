@@ -3,21 +3,34 @@ import { Session } from '../../sessions/entities/session.entity';
 import { Ticket } from '../../tickets/entities/ticket.entity';
 import { MessageLog } from '../../chatbot/entities/message-log.entity';
 
-@Entity()
+@Entity('leads')
 export class Lead {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ unique: true })
-    phoneNumber: string;
+    @Column({ name: 'phone', unique: true })
+    phone: string;
 
     @Column({ nullable: true })
     name: string;
 
-    @CreateDateColumn()
+    @Column({ nullable: true })
+    email: string;
+
+    @Column('jsonb', { nullable: true })
+    metadata: Record<string, any>;
+
+    @Column({
+        type: 'enum',
+        enum: ['new', 'contacted', 'qualified', 'converted'],
+        default: 'new'
+    })
+    status: string;
+
+    @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
 
-    @UpdateDateColumn()
+    @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
 
     @OneToMany(() => Session, (session) => session.lead)
