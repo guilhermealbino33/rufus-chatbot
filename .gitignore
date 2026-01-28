@@ -1,3 +1,6 @@
 .env
 dist
 node_modules
+TASKS.md
+FLOWCHART.md
+MODULES.md
