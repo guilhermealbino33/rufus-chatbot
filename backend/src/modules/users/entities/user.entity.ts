@@ -1,5 +1,4 @@
-import { Entity, Column, OneToMany } from 'typeorm';
-import { Ticket } from '../../tickets/entities/ticket.entity';
+import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
 
 @Entity('users')
@@ -22,8 +21,5 @@ export class User extends BaseEntity {
 
     @Column({ name: 'is_active', default: true })
     isActive: boolean;
-
-    // Relacionamento inverso com Tickets (Atendente)
-    @OneToMany(() => Ticket, (ticket) => ticket.assignedToUser)
-    tickets: Ticket[];
 }
+
