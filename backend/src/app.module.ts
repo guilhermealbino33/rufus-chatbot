@@ -4,10 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
-import { LeadsModule } from './modules/leads/leads.module';
-import { SessionsModule } from './modules/sessions/sessions.module';
-import { TicketsModule } from './modules/tickets/tickets.module';
 import { UsersModule } from './modules/users/users.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -21,10 +19,8 @@ import { UsersModule } from './modules/users/users.module';
       synchronize: true, // Apenas para dev, em prod usar migrations
     }),
     ChatbotModule,
-    LeadsModule,
-    SessionsModule,
-    TicketsModule,
     UsersModule,
+    WhatsappModule,
   ],
   controllers: [AppController],
   providers: [AppService],
