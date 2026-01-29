@@ -1,5 +1,4 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { Lead } from '../../leads/entities/lead.entity';
+import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
 
 export enum Direction {
@@ -9,12 +8,8 @@ export enum Direction {
 
 @Entity('message_logs')
 export class MessageLog extends BaseEntity {
-    @Column({ name: 'lead_id' })
+    @Column({ name: 'lead_id', nullable: true })
     leadId: number;
-
-    @ManyToOne(() => Lead, (lead) => lead.logs)
-    @JoinColumn({ name: 'lead_id' })
-    lead: Lead;
 
     @Column({
         type: 'enum',
@@ -25,3 +20,4 @@ export class MessageLog extends BaseEntity {
     @Column('text')
     content: string;
 }
+
