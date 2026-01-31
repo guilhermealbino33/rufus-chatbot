@@ -14,9 +14,13 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.DATABASE_URL,
+      host: process.env.DATABASE_HOST,
+      port: parseInt(process.env.DATABASE_PORT, 10) || 5432,
+      username: process.env.DATABASE_USERNAME,
+      password: process.env.DATABASE_PASSWORD,
+      database: process.env.DATABASE_NAME,
       autoLoadEntities: true,
-      synchronize: true, // Apenas para dev, em prod usar migrations
+      synchronize: process.env.NODE_ENV !== 'production', // Apenas para dev, em prod usar migrations
     }),
     ChatbotModule,
     UsersModule,
