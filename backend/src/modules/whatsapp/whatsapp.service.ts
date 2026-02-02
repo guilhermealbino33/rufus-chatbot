@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -36,6 +36,45 @@ export class WhatsappService {
         await this.initializeClient(sessionName);
 
         return session;
+    }
+
+    async setupSession(sessionName: string) {
+        try {
+            await this.createSession(sessionName);
+
+            // Wait for QR Code with a 30-second timeout
+            try {
+                const qrCode = await this.waitForQRCode(sessionName, 30000);
+                return {
+                    success: true,
+                    message: 'Sessão criada e QR Code gerado com sucesso',
+                    data: { qrcode: qrCode },
+                };
+            } catch (qrError) {
+                if (qrError.message === 'Timeout waiting for QR Code') {
+                    throw new HttpException(
+                        {
+                            success: false,
+                            message: 'Tempo esgotado aguardando a geração do QR Code',
+                        },
+                        HttpStatus.REQUEST_TIMEOUT,
+                    );
+                }
+                throw qrError;
+            }
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Falha ao criar sessão',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
     private async initializeClient(sessionName: string): Promise<void> {
@@ -143,7 +182,13 @@ export class WhatsappService {
         const client = this.clients.get(sessionName);
 
         if (!client) {
-            throw new Error(`Session ${sessionName} not found or not connected`);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: `Session ${sessionName} not found or not connected`,
+                },
+                HttpStatus.NOT_FOUND,
+            );
         }
 
         try {
@@ -153,46 +198,152 @@ export class WhatsappService {
 
             const result = await client.sendText(chatId, message);
             this.logger.log(`Message sent to ${phone} in session ${sessionName}`);
-            return result;
+            return {
+                success: true,
+                message: 'Message sent successfully',
+                data: result,
+            };
         } catch (error) {
             this.logger.error(`Error sending message in ${sessionName}:`, error);
-            throw error;
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to send message',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
         }
     }
 
-    async getSession(sessionName: string): Promise<WhatsappSession> {
-        return this.sessionRepository.findOne({ where: { sessionName } });
+    async getSession(sessionName: string): Promise<any> {
+        const session = await this.sessionRepository.findOne({ where: { sessionName } });
+        if (!session) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Session not found',
+                },
+                HttpStatus.NOT_FOUND,
+            );
+        }
+        return {
+            success: true,
+            data: session,
+        };
     }
 
-    async getAllSessions(): Promise<WhatsappSession[]> {
-        return this.sessionRepository.find();
+    async getAllSessions(): Promise<any> {
+        try {
+            const sessions = await this.sessionRepository.find();
+            return {
+                success: true,
+                data: sessions,
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to get sessions',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
-    async deleteSession(sessionName: string): Promise<void> {
-        const client = this.clients.get(sessionName);
+    async deleteSession(sessionName: string): Promise<any> {
+        try {
+            const client = this.clients.get(sessionName);
 
-        if (client) {
-            try {
-                await client.close();
-            } catch (error) {
-                this.logger.error(`Error closing client for ${sessionName}:`, error);
+            if (client) {
+                try {
+                    await client.close();
+                } catch (error) {
+                    this.logger.error(`Error closing client for ${sessionName}:`, error);
+                }
+                this.clients.delete(sessionName);
             }
-            this.clients.delete(sessionName);
-        }
 
-        await this.sessionRepository.delete({ sessionName });
-        this.logger.log(`Session ${sessionName} deleted`);
+            await this.sessionRepository.delete({ sessionName });
+            this.logger.log(`Session ${sessionName} deleted`);
+            return {
+                success: true,
+                message: 'Session deleted successfully',
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to delete session',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
     async getSessionStatus(sessionName: string): Promise<any> {
-        const session = await this.getSession(sessionName);
-        const client = this.clients.get(sessionName);
+        try {
+            const result = await this.getSession(sessionName);
+            const session = result.data;
+            const client = this.clients.get(sessionName);
 
-        return {
-            session,
-            isClientActive: !!client,
-            connectionState: client ? await client.getConnectionState() : null,
-        };
+            return {
+                success: true,
+                data: {
+                    session,
+                    isClientActive: !!client,
+                    connectionState: client ? await client.getConnectionState() : null,
+                },
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to get session status',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    async getQRCode(sessionName: string): Promise<any> {
+        try {
+            const result = await this.getSession(sessionName);
+            const session = result.data;
+
+            if (!session.qrCode) {
+                return {
+                    success: false,
+                    message: 'QR Code not available. Session may already be connected or not initialized.',
+                };
+            }
+
+            return {
+                success: true,
+                data: {
+                    qrCode: session.qrCode,
+                    status: session.status,
+                },
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to get QR Code',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
     async waitForQRCode(sessionName: string, timeoutMs: number): Promise<string> {
@@ -209,3 +360,4 @@ export class WhatsappService {
         });
     }
 }
+
