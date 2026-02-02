@@ -19,19 +19,41 @@ export class WhatsappController {
     @Post('sessions')
     async createSession(@Body() createSessionDto: CreateSessionDto) {
         try {
-            const session = await this.whatsappService.createSession(
+            await this.whatsappService.createSession(
                 createSessionDto.sessionName,
             );
-            return {
-                success: true,
-                message: 'Session created successfully',
-                data: session,
-            };
+
+            // Wait for QR Code with a 30-second timeout
+            try {
+                const qrCode = await this.whatsappService.waitForQRCode(
+                    createSessionDto.sessionName,
+                    30000,
+                );
+                return {
+                    success: true,
+                    message: 'Sessão criada e QR Code gerado com sucesso',
+                    data: { qrcode: qrCode },
+                };
+            } catch (qrError) {
+                if (qrError.message === 'Timeout waiting for QR Code') {
+                    throw new HttpException(
+                        {
+                            success: false,
+                            message: 'Tempo esgotado aguardando a geração do QR Code',
+                        },
+                        HttpStatus.REQUEST_TIMEOUT,
+                    );
+                }
+                throw qrError;
+            }
         } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 {
                     success: false,
-                    message: 'Failed to create session',
+                    message: 'Falha ao criar sessão',
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,

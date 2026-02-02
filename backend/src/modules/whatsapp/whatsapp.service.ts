@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as wppconnect from '@wppconnect-team/wppconnect';
@@ -12,6 +13,7 @@ export class WhatsappService {
     constructor(
         @InjectRepository(WhatsappSession)
         private sessionRepository: Repository<WhatsappSession>,
+        private eventEmitter: EventEmitter2,
     ) { }
 
     async createSession(sessionName: string): Promise<WhatsappSession> {
@@ -43,6 +45,7 @@ export class WhatsappService {
                 catchQR: (base64Qr, asciiQR, attempts, urlCode) => {
                     this.logger.log(`QR Code received for session: ${sessionName}`);
                     this.handleQRCode(sessionName, base64Qr);
+                    this.eventEmitter.emit(`qr.${sessionName}`, base64Qr);
                 },
                 statusFind: (statusSession, session) => {
                     this.logger.log(`Status for ${session}: ${statusSession}`);
@@ -190,5 +193,19 @@ export class WhatsappService {
             isClientActive: !!client,
             connectionState: client ? await client.getConnectionState() : null,
         };
+    }
+
+    async waitForQRCode(sessionName: string, timeoutMs: number): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                this.eventEmitter.removeAllListeners(`qr.${sessionName}`);
+                reject(new Error('Timeout waiting for QR Code'));
+            }, timeoutMs);
+
+            this.eventEmitter.once(`qr.${sessionName}`, (qrCode: string) => {
+                clearTimeout(timeout);
+                resolve(qrCode);
+            });
+        });
     }
 }
