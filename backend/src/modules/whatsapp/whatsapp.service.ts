@@ -1,4 +1,11 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import {
+    Injectable,
+    Logger,
+    NotFoundException,
+    RequestTimeoutException,
+    InternalServerErrorException,
+    HttpException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -52,13 +59,10 @@ export class WhatsappService {
                 };
             } catch (qrError) {
                 if (qrError.message === 'Timeout waiting for QR Code') {
-                    throw new HttpException(
-                        {
-                            success: false,
-                            message: 'Tempo esgotado aguardando a geração do QR Code',
-                        },
-                        HttpStatus.REQUEST_TIMEOUT,
-                    );
+                    throw new RequestTimeoutException({
+                        success: false,
+                        message: 'Tempo esgotado aguardando a geração do QR Code',
+                    });
                 }
                 throw qrError;
             }
@@ -66,14 +70,11 @@ export class WhatsappService {
             if (error instanceof HttpException) {
                 throw error;
             }
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Falha ao criar sessão',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Falha ao criar sessão',
+                error: error.message,
+            });
         }
     }
 
@@ -182,13 +183,10 @@ export class WhatsappService {
         const client = this.clients.get(sessionName);
 
         if (!client) {
-            throw new HttpException(
-                {
-                    success: false,
-                    message: `Session ${sessionName} not found or not connected`,
-                },
-                HttpStatus.NOT_FOUND,
-            );
+            throw new NotFoundException({
+                success: false,
+                message: `Session ${sessionName} not found or not connected`,
+            });
         }
 
         try {
@@ -205,27 +203,21 @@ export class WhatsappService {
             };
         } catch (error) {
             this.logger.error(`Error sending message in ${sessionName}:`, error);
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to send message',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Failed to send message',
+                error: error.message,
+            });
         }
     }
 
     async getSession(sessionName: string): Promise<any> {
         const session = await this.sessionRepository.findOne({ where: { sessionName } });
         if (!session) {
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Session not found',
-                },
-                HttpStatus.NOT_FOUND,
-            );
+            throw new NotFoundException({
+                success: false,
+                message: 'Session not found',
+            });
         }
         return {
             success: true,
@@ -241,14 +233,11 @@ export class WhatsappService {
                 data: sessions,
             };
         } catch (error) {
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to get sessions',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Failed to get sessions',
+                error: error.message,
+            });
         }
     }
 
@@ -272,14 +261,11 @@ export class WhatsappService {
                 message: 'Session deleted successfully',
             };
         } catch (error) {
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to delete session',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Failed to delete session',
+                error: error.message,
+            });
         }
     }
 
@@ -301,14 +287,11 @@ export class WhatsappService {
             if (error instanceof HttpException) {
                 throw error;
             }
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to get session status',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Failed to get session status',
+                error: error.message,
+            });
         }
     }
 
@@ -335,14 +318,11 @@ export class WhatsappService {
             if (error instanceof HttpException) {
                 throw error;
             }
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to get QR Code',
-                    error: error.message,
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw new InternalServerErrorException({
+                success: false,
+                message: 'Failed to get QR Code',
+                error: error.message,
+            });
         }
     }
 
@@ -360,4 +340,5 @@ export class WhatsappService {
         });
     }
 }
+
 
