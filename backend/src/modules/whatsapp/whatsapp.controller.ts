@@ -16,7 +16,7 @@ export class WhatsappController {
 
     @Post('sessions')
     async createSession(@Body() createSessionDto: CreateSessionDto) {
-        return this.whatsappService.setupSession(createSessionDto.sessionName);
+        return this.whatsappService.startSession(createSessionDto.sessionName);
     }
 
     @Get('sessions')
