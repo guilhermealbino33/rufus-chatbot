@@ -84,11 +84,9 @@ export class WhatsappService {
                         this.handleStatusChange(sessionName, statusSession);
 
                         if (statusSession === 'inChat' || statusSession === 'isLogged') {
-                            if (!isResolved) {
-                                isResolved = true;
-                                clearTimeout(timeoutId);
-                                resolve({ status: 'CONNECTED' });
-                            }
+                            // Do check status here but DO NOT resolve the promise yet.
+                            // We need to wait for .then() to store the client instance.
+                            this.logger.log(`Session ${session} is ${statusSession}, waiting for client init...`);
                         }
                     },
                     headless: true,
