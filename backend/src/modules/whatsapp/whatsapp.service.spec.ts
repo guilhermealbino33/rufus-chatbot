@@ -3,7 +3,7 @@ import { WhatsappService } from "./whatsapp.service";
 import { WhatsappSession } from "./entities/whatsapp-session.entity";
 import { Repository } from "typeorm";
 import * as wppconnect from '@wppconnect-team/wppconnect';
-import { InternalServerErrorException, NotFoundException, RequestTimeoutException } from "@nestjs/common";
+import { InternalServerErrorException, NotFoundException, RequestTimeoutException, BadRequestException } from "@nestjs/common";
 import { SessionStatus } from "./enums/whatsapp.enum";
 
 jest.mock('@wppconnect-team/wppconnect', () => ({
@@ -171,19 +171,56 @@ describe('WhatsappService', () => {
                 .rejects.toThrow(NotFoundException);
         });
 
-        it('should send message successfully if session is connected', async () => {
+        it('should send message successfully if number is valid', async () => {
             const { sut } = makeSut()
 
             const sessionName = 'active-session';
             const mockClient = {
-                sendText: jest.fn().mockResolvedValue({ msgId: '123' })
+                sendText: jest.fn().mockResolvedValue({ msgId: '123' }),
+                checkNumberStatus: jest.fn().mockResolvedValue({
+                    numberExists: true,
+                    id: { _serialized: '5511999998888@c.us' }
+                })
             };
             (sut as any).clients.set(sessionName, mockClient);
 
-            const result = await sut.sendMessage(sessionName, '5511999999999', 'hello');
+            const result = await sut.sendMessage(sessionName, '5511999998888', 'hello');
 
-            expect(mockClient.sendText).toHaveBeenCalledWith('5511999999999@c.us', 'hello');
+            expect(mockClient.checkNumberStatus).toHaveBeenCalledWith('5511999998888@c.us');
+            expect(mockClient.sendText).toHaveBeenCalledWith('5511999998888@c.us', 'hello');
             expect(result.success).toBe(true);
+        });
+
+        it('should throw BadRequestException if number format is invalid', async () => {
+            const { sut } = makeSut()
+
+            const sessionName = 'active-session';
+            const mockClient = {
+                sendText: jest.fn(),
+                checkNumberStatus: jest.fn()
+            };
+            (sut as any).clients.set(sessionName, mockClient);
+
+            await expect(sut.sendMessage(sessionName, '123', 'short'))
+                .rejects.toThrow(BadRequestException);
+
+            expect(mockClient.checkNumberStatus).not.toHaveBeenCalled();
+        });
+
+        it('should throw BadRequestException if number does not exist on WhatsApp', async () => {
+            const { sut } = makeSut()
+
+            const sessionName = 'active-session';
+            const mockClient = {
+                sendText: jest.fn(),
+                checkNumberStatus: jest.fn().mockResolvedValue({ numberExists: false })
+            };
+            (sut as any).clients.set(sessionName, mockClient);
+
+            await expect(sut.sendMessage(sessionName, '5511999998888', 'hello'))
+                .rejects.toThrow(BadRequestException);
+
+            expect(mockClient.sendText).not.toHaveBeenCalled();
         });
 
         it('should throw InternalServerErrorException on send failure', async () => {
@@ -191,11 +228,15 @@ describe('WhatsappService', () => {
 
             const sessionName = 'error-session';
             const mockClient = {
+                checkNumberStatus: jest.fn().mockResolvedValue({
+                    numberExists: true,
+                    id: { _serialized: '5511999999999@c.us' }
+                }),
                 sendText: jest.fn().mockRejectedValue(new Error('Send failed'))
             };
             (sut as any).clients.set(sessionName, mockClient);
 
-            await expect(sut.sendMessage(sessionName, '123', 'hi'))
+            await expect(sut.sendMessage(sessionName, '5511999999999', 'hi'))
                 .rejects.toThrow(InternalServerErrorException);
         });
     });

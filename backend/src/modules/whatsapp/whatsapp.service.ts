@@ -5,6 +5,7 @@ import {
     RequestTimeoutException,
     InternalServerErrorException,
     HttpException,
+    BadRequestException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -256,9 +257,23 @@ export class WhatsappService {
 
         try {
             const formattedPhone = phone.replace(/\D/g, '');
+            // Basic format check
+            if (formattedPhone.length < 10) {
+                throw new BadRequestException('Invalid phone number format');
+            }
+
             const chatId = `${formattedPhone}@c.us`;
 
-            const result = await client.sendText(chatId, message);
+            // Validate number with WPPConnect
+            const resultCheck = await client.checkNumberStatus(chatId);
+
+            if (!resultCheck.numberExists) {
+                throw new BadRequestException(`Number ${phone} is not registered on WhatsApp`);
+            }
+
+            // Use the valid serialized ID from the check result
+            const result = await client.sendText(resultCheck.id._serialized, message);
+
             return {
                 success: true,
                 message: 'Message sent successfully',
@@ -266,6 +281,11 @@ export class WhatsappService {
             };
         } catch (error) {
             this.logger.error(`Error sending message in ${sessionName}:`, error);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
             throw new InternalServerErrorException({
                 success: false,
                 message: 'Failed to send message',
