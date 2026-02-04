@@ -4,6 +4,7 @@ import { WhatsappSession } from "./entities/whatsapp-session.entity";
 import { Repository } from "typeorm";
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { InternalServerErrorException, NotFoundException, RequestTimeoutException } from "@nestjs/common";
+import { SessionStatus } from "./enums/whatsapp.enum";
 
 jest.mock('@wppconnect-team/wppconnect', () => ({
     create: jest.fn(),
@@ -31,10 +32,6 @@ const makeSut = (): MakeSutTypes => {
 
     const sut = new WhatsappService(sessionRepository, eventEmitter);
 
-    /**
-     * @todo
-     * Remover o uso de console log dentro do whatsapp.service
-     */
     (sut as any).logger = {
         log: jest.fn(),
         error: jest.fn(),
@@ -58,11 +55,14 @@ describe('WhatsappService', () => {
             const sessionName = 'test-session';
             sessionRepository.findOne.mockResolvedValue({
                 sessionName,
-                status: 'connected'
+                status: SessionStatus.CONNECTED
             } as WhatsappSession);
 
             // Manually add client to map (simulating active memory)
-            const mockClient = { close: jest.fn() } as any;
+            const mockClient = {
+                close: jest.fn(),
+                isConnected: jest.fn().mockResolvedValue(true)
+            } as any;
             (sut as any).clients.set(sessionName, mockClient);
 
             const result = await sut.startSession(sessionName);
@@ -78,7 +78,7 @@ describe('WhatsappService', () => {
 
             const sessionName = 'new-session';
             sessionRepository.findOne.mockResolvedValue(null);
-            sessionRepository.create.mockReturnValue({ sessionName, status: 'connecting' } as WhatsappSession);
+            sessionRepository.create.mockReturnValue({ sessionName, status: SessionStatus.CONNECTING } as WhatsappSession);
 
             mockWppCreate.mockResolvedValue({
                 onMessage: jest.fn(),
@@ -87,7 +87,7 @@ describe('WhatsappService', () => {
 
             await sut.startSession(sessionName);
 
-            expect(sessionRepository.create).toHaveBeenCalledWith({ sessionName, status: 'connecting' });
+            expect(sessionRepository.create).toHaveBeenCalledWith({ sessionName, status: SessionStatus.CONNECTING });
             expect(sessionRepository.save).toHaveBeenCalled();
         });
 
@@ -110,7 +110,7 @@ describe('WhatsappService', () => {
             expect(result).toEqual({ status: 'QRCODE', qrcode: 'base64-code' });
             expect(sessionRepository.update).toHaveBeenCalledWith(
                 { sessionName },
-                { qrCode: 'base64-code', status: 'qrcode' }
+                { qrCode: 'base64-code', status: SessionStatus.QRCODE }
             );
         });
 
@@ -143,8 +143,7 @@ describe('WhatsappService', () => {
             const sessionName = 'timeout-session';
             sessionRepository.findOne.mockResolvedValue(null);
 
-            // Mock create to resolve AFTER the timeout, ensuring the internal logic triggers timeout first.
-            // Using a plain function that returns a promise that resolves later.
+            // Mock create to resolve AFTER the timeout
             let resolveCreate: (value: any) => void;
             mockWppCreate.mockImplementation(() => new Promise((res) => {
                 resolveCreate = res;
@@ -155,11 +154,10 @@ describe('WhatsappService', () => {
             const promise = sut.startSession(sessionName);
 
             // Advance time to trigger the service's internal timeout (20s)
-            jest.advanceTimersByTime(21000); // 21s
+            jest.advanceTimersByTime(21000);
 
             await expect(promise).rejects.toThrow(RequestTimeoutException);
 
-            // Cleanup: resolve the pending create promise to avoid open handles
             if (resolveCreate!) resolveCreate({});
             jest.useRealTimers();
         });
@@ -222,14 +220,25 @@ describe('WhatsappService', () => {
     });
 
     describe('getAllSessions', () => {
-        it('should return list of sessions', async () => {
-            const { sut, sessionRepository } = makeSut()
+        it('should return list of sessions with real-time status', async () => {
+            const { sut, sessionRepository } = makeSut();
 
-            const sessions = [{ sessionName: 's1' }] as WhatsappSession[];
+            const sessionName = 's1';
+            const sessions = [{ sessionName, status: SessionStatus.CONNECTED }] as WhatsappSession[];
             sessionRepository.find.mockResolvedValue(sessions);
+            sessionRepository.findOne.mockResolvedValue(sessions[0]);
+
+            // Mock active client
+            const mockClient = {
+                isConnected: jest.fn().mockResolvedValue(true)
+            };
+            (sut as any).clients.set(sessionName, mockClient);
 
             const result = await sut.getAllSessions();
-            expect(result.data).toBe(sessions);
+
+            expect(result.data).toHaveLength(1);
+            expect(result.data[0].status).toBe(SessionStatus.CONNECTED);
+            expect(result.data[0].sessionName).toBe(sessionName);
         });
     });
 
@@ -255,40 +264,61 @@ describe('WhatsappService', () => {
             const { sut, sessionRepository } = makeSut()
 
             const sessionName = 'status-session';
-            const session = { sessionName, status: 'connected' } as WhatsappSession;
+            const session = { sessionName, status: SessionStatus.CONNECTED } as WhatsappSession;
             sessionRepository.findOne.mockResolvedValue(session);
 
             const mockClient = {
+                isConnected: jest.fn().mockResolvedValue(true),
                 getConnectionState: jest.fn().mockResolvedValue('CONNECTED')
             };
             (sut as any).clients.set(sessionName, mockClient);
 
             const result = await sut.getSessionStatus(sessionName);
 
-            expect(result.data.session).toBe(session);
+            expect(result.data.session.sessionName).toBe(sessionName);
             expect(result.data.isClientActive).toBe(true);
-            expect(result.data.connectionState).toBe('CONNECTED');
+            expect(result.data.connectionState).toBe(SessionStatus.CONNECTED);
         });
     });
 
     describe('getQRCode', () => {
-        it('should return qrcode if available', async () => {
-            const { sut, sessionRepository } = makeSut()
+        it('should return connected status if already connected check passes', async () => {
+            const { sut, sessionRepository } = makeSut();
 
-            const session = { sessionName: 'qr', qrCode: 'abc' } as WhatsappSession;
+            const sessionName = 'qr-conn';
+            const session = { sessionName, qrCode: 'abc', status: SessionStatus.CONNECTED } as WhatsappSession;
             sessionRepository.findOne.mockResolvedValue(session);
 
-            const result = await sut.getQRCode('qr');
+            // Mock client active
+            const mockClient = { isConnected: jest.fn().mockResolvedValue(true) };
+            (sut as any).clients.set(sessionName, mockClient);
+
+            const result = await sut.getQRCode(sessionName);
+            expect(result.data.status).toBe(SessionStatus.CONNECTED);
+            expect(result.data.message).toBeDefined();
+        });
+
+        it('should return qrcode if available and not connected', async () => {
+            const { sut, sessionRepository } = makeSut()
+
+            const sessionName = 'qr';
+            const session = { sessionName, qrCode: 'abc', status: SessionStatus.QRCODE } as WhatsappSession;
+            sessionRepository.findOne.mockResolvedValue(session);
+
+            // No client in memory
+
+            const result = await sut.getQRCode(sessionName);
             expect(result.data.qrCode).toBe('abc');
         });
 
         it('should return failure message if qrCode is null', async () => {
             const { sut, sessionRepository } = makeSut()
 
-            const session = { sessionName: 'no-qr', qrCode: null } as WhatsappSession;
+            const sessionName = 'no-qr';
+            const session = { sessionName, qrCode: null } as WhatsappSession;
             sessionRepository.findOne.mockResolvedValue(session);
 
-            const result = await sut.getQRCode('no-qr');
+            const result = await sut.getQRCode(sessionName);
             expect(result.success).toBe(false);
         });
     });
