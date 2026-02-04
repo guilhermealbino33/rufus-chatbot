@@ -22,22 +22,28 @@ Atualmente, o backend conta com as seguintes funcionalidades implementadas:
   5. Loga no console a resposta que seria enviada (simulação de envio).
   6. Retorna status `200 OK` rapidamente para o webhook.
 
-#### 2. Arquitetura Modular
-O projeto segue uma arquitetura modular para facilitar a manutenção e escalabilidade. Os seguintes módulos já possuem estrutura inicial (Controllers/Services):
+#### 2. Whatsapp Integration
+- **Módulo**: `Whatsapp`
+- **Descrição**: Integração completa com API do WhatsApp via WPPConnect.
+- **Funcionalidades**:
+  - **Sessões (`/whatsapp/sessions`)**: 
+    - Criação de sessões.
+    - Geração de QR Code (retornado em Base64).
+    - Verificação de status em tempo real (`CONNECTED`, `QRCODE`, `DISCONNECTED`).
+    - **Auto-Recuperação**: O sistema tenta recuperar automaticamente sessões desconectadas ao verificar o status.
+  - **Mensagens (`/whatsapp/messages/send`)**:
+    - Envio de mensagens de texto.
+    - Validação automática de números (retorna `400 Bad Request` se número não existir/inválido).
+
+#### 3. Arquitetura Modular
+O projeto segue uma arquitetura modular para facilitar a manutenção e escalabilidade:
 
 - **Chatbot Module**: 
   - Responsável pela lógica principal de conversação e interface com o webhook.
-- **Leads Module**: 
-  - Estrutura inicial criada para futuro gerenciamento de leads capturados.
-  - Controller definido: `/leads` (Endpoints em desenvolvimento).
-- **Tickets Module**: 
-  - Estrutura inicial criada para gestão de atendimentos.
-  - Controller definido: `/tickets` (Endpoints em desenvolvimento).
+- **Whatsapp Module**:
+  - Gerenciamento de conexão com WhatsApp, envio e recebimento de mensagens.
 - **Users Module**: 
   - Estrutura inicial para gestão de usuários do sistema.
-  - Controller definido: `/users` (Endpoints em desenvolvimento).
-- **Sessions Module**: 
-  - Módulo interno (sem controller exposto) focado na gestão de estados e sessões dos usuários/bots.
 
 ### 🛠️ Como Executar o Backend
 
@@ -61,4 +67,4 @@ Pré-requisitos: Node.js instalado.
 4. O servidor estará rodando em `http://localhost:3000` (porta padrão).
 
 ---
-*Documentação gerada automaticamente com base no estado atual do desenvolvimento.*
+*Documentação atualizada em 03/02/2026*
