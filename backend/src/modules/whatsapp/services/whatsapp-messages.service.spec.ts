@@ -89,7 +89,7 @@ describe('WhatsappMessagesService', () => {
             };
             (sut as any).clients.set(sessionName, mockClient);
 
-            await expect(sut.send(sessionName, '5511999999999', 'hi'))
+            await expect(sut.send({sessionName, phone: '5511999999999', message: 'hi'}))
                 .rejects.toThrow(InternalServerErrorException);
         });
     });
