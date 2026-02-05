@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { WhatsappMessagesService } from '../whatsapp/services/whatsapp-messages.service';
 
 @Injectable()
 export class ChatbotService {
     private readonly logger = new Logger(ChatbotService.name);
 
-    constructor(private readonly whatsappService: WhatsappService) { }
+    constructor(private readonly whatsappService: WhatsappMessagesService) { }
 
     async handleWebhook(payload: any) {
         this.logger.log(`Webhook received: ${JSON.stringify(payload)}`);
@@ -23,10 +23,10 @@ export class ChatbotService {
                 this.logger.log(`Responding to ${message.from}: ${result.response}`);
 
                 try {
-                    await this.whatsappService.sendMessage(
-                        sessionName,
-                        message.from,
-                        result.response
+                    await this.whatsappService.send(
+                        { sessionName,
+                        phone: message.from,
+                        message: result.response}
                     );
                 } catch (error) {
                     this.logger.error(`Error sending response to ${message.from}:`, error.message);

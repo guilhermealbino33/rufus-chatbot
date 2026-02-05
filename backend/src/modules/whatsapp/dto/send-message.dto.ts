@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, MinLength, MaxLength, Matches } from 'class-validator';
 
-export class SendMessageDto {
+export class SendMessageDTO {
     @IsString()
     @IsNotEmpty({ message: 'Session name is required' })
     @MinLength(3, { message: 'Session name must be at least 3 characters long' })
