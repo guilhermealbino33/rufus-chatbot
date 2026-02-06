@@ -10,34 +10,30 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
 import { SessionStatus } from '../enums/whatsapp.enum';
 import { SearchSessionsDTO } from '../dto';
+import { WhatsappClientManager } from '../providers';
+import { WhatsappClientConfig } from '../../../crosscutting/config/whatsapp-client.config';
 
 
 @Injectable()
 export class WhatsappSessionsService {
     private readonly logger = new Logger(WhatsappSessionsService.name);
-    private clients: Map<string, wppconnect.Whatsapp> = new Map();
 
     constructor(
         @InjectRepository(WhatsappSession)
         private sessionRepository: Repository<WhatsappSession>,
+        private clientManager: WhatsappClientManager,
         private eventEmitter: EventEmitter2,
-        /**
-         * @todo
-         * Verificar o pq está injetando o EventEmitter2 aqui se ele não está sendo usado em lugar algum
-         */
     ) { }
 
     async start(sessionName: string): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
         this.logger.log(`Starting session: ${sessionName}`);
 
         // 1. Check if session exists and is already connected in memory
-        if (this.clients.has(sessionName)) {
-            const client = this.clients.get(sessionName);
-            const isConnected = await client.isConnected();
+        if (this.clientManager.hasClient(sessionName)) {
+            const isConnected = await this.clientManager.isClientConnected(sessionName);
             if (isConnected) {
                 return { status: 'CONNECTED' };
             }
@@ -63,21 +59,18 @@ export class WhatsappSessionsService {
 
 
     async checkStatus(sessionName: string): Promise<string> {
-        const client = this.clients.get(sessionName);
-
         // 1. If we have client in memory, ask it directly
-        if (client) {
+        if (this.clientManager.hasClient(sessionName)) {
             try {
-                const isConnected = await client.isConnected();
+                const isConnected = await this.clientManager.isClientConnected(sessionName);
                 if (isConnected) return SessionStatus.CONNECTED;
 
                 // If not connected but client exists, check detailed state
-                const state = await client.getConnectionState();
+                const state = await this.clientManager.getConnectionState(sessionName);
                 if (state === 'CONNECTED') return SessionStatus.CONNECTED;
                 return SessionStatus.DISCONNECTED;
             } catch (error) {
-                // Client might be dead
-                this.clients.delete(sessionName);
+                // Client might be dead (already handled by manager)
                 return SessionStatus.DISCONNECTED;
             }
         }
@@ -96,9 +89,9 @@ export class WhatsappSessionsService {
         return session.status;
     }
 
-   
 
- 
+
+
 
     async get(sessionName: string): Promise<any> {
         const session = await this.sessionRepository.findOne({ where: { sessionName } });
@@ -144,12 +137,12 @@ export class WhatsappSessionsService {
         data: WhatsappSession[];
         pages: number;
         total: number;
-      }> {
+    }> {
         const [data, total] = await this.sessionRepository.findAndCount({
-          skip: (page - 1) * limit,
-          take: limit,
+            skip: (page - 1) * limit,
+            take: limit,
         });
-    
+
         /**
          * @todo
          * - implementar busca por nome
@@ -158,22 +151,14 @@ export class WhatsappSessionsService {
          */
 
         const pages = Math.ceil(total / limit);
-    
+
         return { data, pages, total };
-      }
+    }
 
     async delete(sessionName: string): Promise<any> {
         try {
-            const client = this.clients.get(sessionName);
-
-            if (client) {
-                try {
-                    await client.close();
-                } catch (error) {
-                    this.logger.error(`Error closing client for ${sessionName}:`, error);
-                }
-                this.clients.delete(sessionName);
-            }
+            // Delegate client cleanup to Manager
+            await this.clientManager.removeClient(sessionName);
 
             await this.sessionRepository.delete({ sessionName });
             this.logger.log(`Session ${sessionName} deleted`);
@@ -202,7 +187,7 @@ export class WhatsappSessionsService {
             }
 
             const realStatus = await this.checkStatus(sessionName);
-            const client = this.clients.get(sessionName);
+            const isClientActive = this.clientManager.hasClient(sessionName);
 
             return {
                 success: true,
@@ -211,7 +196,7 @@ export class WhatsappSessionsService {
                         ...session,
                         status: realStatus
                     },
-                    isClientActive: !!client,
+                    isClientActive,
                     connectionState: realStatus,
                 },
             };
@@ -272,12 +257,6 @@ export class WhatsappSessionsService {
     }
 
     private async initializeClient(sessionName: string): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
-        /**
-         * @todo
-         * 
-         * - verificar a possibilidade de o Client ser uma classe a parte
-         */
-
         return new Promise(async (resolve, reject) => {
             const timeoutMs = 20000;
             let isResolved = false;
@@ -290,89 +269,66 @@ export class WhatsappSessionsService {
             }, timeoutMs);
 
             try {
-                await wppconnect.create({
-                    session: sessionName,
-                    catchQR: (base64Qr, asciiQR) => {
+                // ✅ Configuration separated and typed
+                const config: WhatsappClientConfig = {
+                    sessionName,
+                    onQRCode: (base64Qr) => {
                         if (!isResolved) {
                             this.logger.log(`QR Code captured for ${sessionName}`);
                             this.handleQRCode(sessionName, base64Qr);
                             isResolved = true;
                             clearTimeout(timeoutId);
-                            resolve({
-                                status: 'QRCODE',
-                                qrcode: base64Qr
-                            });
+                            resolve({ status: 'QRCODE', qrcode: base64Qr });
                         }
                     },
-                    statusFind: (statusSession, session) => {
-                        this.logger.log(`Status change for ${session}: ${statusSession}`);
-                        this.handleStatusChange(sessionName, statusSession);
+                    onStatusChange: (status, session) => {
+                        this.logger.log(`Status change for ${session}: ${status}`);
+                        this.handleStatusChange(sessionName, status);
                     },
-                    headless: true,
-                    devtools: false,
-                    useChrome: true,
-                    debug: false,
-                    logQR: false,
-                    browserArgs: [
-                        '--disable-web-security',
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                    ],
-                    autoClose: 0,
-                })
-                    .then((client) => {
-                        this.clients.set(sessionName, client);
+                };
 
-                        client.onMessage(async (message) => {
-                            await this.handleIncomingMessage(sessionName, message);
-                        });
+                // ✅ Delegate creation to Manager
+                const client = await this.clientManager.createClient(sessionName, config);
 
-                        if (!isResolved) {
-                            isResolved = true;
-                            clearTimeout(timeoutId);
-                            resolve({ status: 'CONNECTED' });
-                        }
-                    });
+                // Register message listener
+                client.onMessage(async (message) => {
+                    await this.handleIncomingMessage(sessionName, message);
+                });
+
+                if (!isResolved) {
+                    isResolved = true;
+                    clearTimeout(timeoutId);
+                    resolve({ status: 'CONNECTED' });
+                }
             } catch (error) {
                 if (!isResolved) {
                     isResolved = true;
                     clearTimeout(timeoutId);
                     this.logger.error(`Error creating client: ${error.message}`);
-                    reject(new InternalServerErrorException(`Failed to initialize WPPConnect: ${error.message}`));
+                    reject(error);
                 }
             }
         });
     }
 
     private async recoverSession(sessionName: string) {
-        if (this.clients.has(sessionName)) return; // Already recovering or active
+        if (this.clientManager.hasClient(sessionName)) return; // Already recovering or active
 
         this.logger.log(`Recovering session ${sessionName}...`);
         try {
-            await wppconnect.create({
-                session: sessionName,
-                catchQR: (base64Qr, asciiQR) => {
+            const config: WhatsappClientConfig = {
+                sessionName,
+                onQRCode: (base64Qr) => {
                     // If it asks for QR during recovery, it means it's definitely disconnected
                     this.updateSessionStatus(sessionName, SessionStatus.QRCODE);
                 },
-                statusFind: (status) => this.handleStatusChange(sessionName, status),
-                headless: true,
-                devtools: false,
-                useChrome: true,
-                debug: false,
-                logQR: false,
-                browserArgs: [
-                    '--disable-web-security',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                ],
-                autoClose: 0,
-            }).then(client => {
-                this.clients.set(sessionName, client);
-                client.onMessage(msg => this.handleIncomingMessage(sessionName, msg));
-                this.logger.log(`Session ${sessionName} recovered successfully.`);
-                this.updateSessionStatus(sessionName, SessionStatus.CONNECTED);
-            });
+                onStatusChange: (status) => this.handleStatusChange(sessionName, status),
+            };
+
+            const client = await this.clientManager.createClient(sessionName, config);
+            client.onMessage(msg => this.handleIncomingMessage(sessionName, msg));
+            this.logger.log(`Session ${sessionName} recovered successfully.`);
+            this.updateSessionStatus(sessionName, SessionStatus.CONNECTED);
         } catch (e) {
             this.logger.error(`Failed to recover session ${sessionName}: ${e.message}`);
             this.updateSessionStatus(sessionName, SessionStatus.DISCONNECTED);
