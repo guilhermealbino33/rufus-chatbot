@@ -1,7 +1,9 @@
+import { Exists } from 'src/shared/common/decorators';
+
 export class DeleteSessionDTO {
     /**
-     * @todo
-     * implementar validação @Exists, que procura no banco antes de chegar ao service
+     * @todo testar validação
      */
+    @Exists({ tableName: 'whatsapp_sessions', column: 'session_name' })
     sessionName: string;
 }
