@@ -7,7 +7,6 @@ import {
     HttpException,
 
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
