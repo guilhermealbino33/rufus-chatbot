@@ -1,0 +1,9 @@
+{
+    "name": "rufus-chatbot-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "echo 'Frontend dev server not yet configured'",
+        "build": "echo 'Frontend build not yet configured'"
+    }
+}

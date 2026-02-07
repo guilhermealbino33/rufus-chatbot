@@ -5,33 +5,57 @@ import {
     InternalServerErrorException,
     HttpException,
     BadRequestException,
+    OnModuleInit,
 } from '@nestjs/common';
-import * as wppconnect from '@wppconnect-team/wppconnect';
 import { SendMessageDTO } from '../dto';
+import { WhatsappClientManager } from '../providers';
+import { WebhookService } from '../../../shared/services/webhook.service';
+import { OutgoingWhatsappMessage } from '../../../shared/interfaces/messaging.interface';
 
 
 @Injectable()
-export class WhatsappMessagesService {
+export class WhatsappMessagesService implements OnModuleInit {
     private readonly logger = new Logger(WhatsappMessagesService.name);
-    /**
-     * @todo
-     * 
-     * - verificar melhor forma de trabalhar com Logger
-     */
-    private clients: Map<string, wppconnect.Whatsapp> = new Map();
 
     constructor(
-
+        private clientManager: WhatsappClientManager,
+        private webhookService: WebhookService,
     ) { }
 
+    onModuleInit() {
+        // Subscribe to outgoing message events via WebhookService
+        this.webhookService.onMessageSend(async (msg: OutgoingWhatsappMessage) => {
+            await this.handleOutgoingMessage(msg);
+        });
+        this.logger.log('✅ Subscribed to message.send events');
+    }
 
+    /**
+     * Handles outgoing messages from the event system
+     */
+    private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
+        try {
+            await this.send({
+                sessionName: msg.sessionId,
+                phone: msg.to,
+                message: msg.body,
+            });
+        } catch (error) {
+            this.logger.error(
+                `Failed to send message via event to ${msg.to}:`,
+                error.message
+            );
+        }
+    }
+
+
+    /**
+     * Sends a message via WhatsApp (can be called directly via API or via events)
+     */
     async send(
         { sessionName, phone, message }: SendMessageDTO
-    ): Promise<any> /*
-    @todo
-    - tipar retorno
-    */{
-        const client = this.clients.get(sessionName);
+    ): Promise<any> {
+        const client = this.clientManager.getClient(sessionName);
 
         if (!client) {
             throw new NotFoundException({
