@@ -15,6 +15,8 @@ import { SessionStatus } from '../enums/whatsapp.enum';
 import { SearchSessionsDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WhatsappClientConfig } from '../../../crosscutting/config/whatsapp-client.config';
+import { WebhookService } from '../../../shared/services/webhook.service';
+import { IncomingWhatsappMessage } from '../../../shared/interfaces/messaging.interface';
 
 
 @Injectable()
@@ -26,6 +28,7 @@ export class WhatsappSessionsService {
         private sessionRepository: Repository<WhatsappSession>,
         private clientManager: WhatsappClientManager,
         private eventEmitter: EventEmitter2,
+        private webhookService: WebhookService,
     ) { }
 
     async start(sessionName: string): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
@@ -382,6 +385,19 @@ export class WhatsappSessionsService {
         sessionName: string,
         message: any,
     ): Promise<void> {
-        this.logger.debug(`Message received in ${sessionName}`);
+        this.logger.debug(`Message received in ${sessionName} from ${message.from}`);
+
+        // Transform WPPConnect message to WhatsApp-specific format
+        const incomingMessage: IncomingWhatsappMessage = {
+            sessionId: sessionName,
+            from: message.from,
+            body: message.body,
+            timestamp: new Date(),
+            isGroup: message.isGroupMsg || false,
+            chatId: message.chatId || message.from,
+        };
+
+        // Emit event via WebhookService (fire and forget)
+        this.webhookService.emitMessageReceived(incomingMessage);
     }
 }
