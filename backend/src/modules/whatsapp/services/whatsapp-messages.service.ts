@@ -7,7 +7,6 @@ import {
     BadRequestException,
     OnModuleInit,
 } from '@nestjs/common';
-import * as wppconnect from '@wppconnect-team/wppconnect';
 import { SendMessageDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';

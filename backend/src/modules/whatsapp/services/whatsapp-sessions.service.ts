@@ -5,7 +5,7 @@ import {
     RequestTimeoutException,
     InternalServerErrorException,
     HttpException,
-    BadRequestException,
+
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -27,7 +27,6 @@ export class WhatsappSessionsService {
         @InjectRepository(WhatsappSession)
         private sessionRepository: Repository<WhatsappSession>,
         private clientManager: WhatsappClientManager,
-        private eventEmitter: EventEmitter2,
         private webhookService: WebhookService,
     ) { }
 
