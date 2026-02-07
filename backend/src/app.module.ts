@@ -1,11 +1,13 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { WebhookService } from './shared/services/webhook.service';
 
+@Global()
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,6 +29,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     WhatsappModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [WebhookService],
+  exports: [WebhookService],
 })
 export class AppModule { }
