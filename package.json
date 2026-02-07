@@ -1,23 +1,26 @@
 {
-    "name": "rufus-chatbot-workspace",
-    "private": true,
-    "description": "Monorepo para o projeto Rufus Chatbot",
-    "workspaces": [
-        "backend",
-        "frontend"
-    ],
-    "scripts": {
-        "lint": "eslint \"{backend,frontend}/**/*.ts*\" --fix",
-        "format": "prettier --write \"{backend,frontend}/**/*.{ts,tsx,js,json,md}\"",
-        "backend:dev": "npm run start:dev -w backend",
-        "frontend:dev": "npm run dev -w frontend"
-    },
-    "devDependencies": {
-        "eslint": "^8.42.0",
-        "prettier": "^3.0.0",
-        "eslint-config-prettier": "^9.0.0",
-        "eslint-plugin-prettier": "^5.0.0",
-        "@typescript-eslint/eslint-plugin": "^6.0.0",
-        "@typescript-eslint/parser": "^6.0.0"
-    }
+  "name": "rufus-chatbot-workspace",
+  "private": true,
+  "description": "Monorepo para o projeto Rufus Chatbot",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "lint": "eslint \"{backend,frontend}/**/*.ts*\" --cache --cache-location .eslintcache --fix",
+    "format": "prettier --write \"{backend,frontend}/**/*.{ts,tsx,js,json,md}\"",
+    "backend:dev": "npm run start:dev -w backend",
+    "frontend:dev": "npm run dev -w frontend"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.42.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.0.0"
+  }
 }
