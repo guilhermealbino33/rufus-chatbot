@@ -19,6 +19,10 @@ export interface QRCodeResponse {
   message?: string;
 }
 
+/**
+ * @todo
+ * Futuramente mover para interface de paginação genérica
+ */
 export interface PaginationResponse<T> {
   data: T[];
   pages: number;
