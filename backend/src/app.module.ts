@@ -6,6 +6,7 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
+import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
 
 @Global()
 @Module({
@@ -29,7 +30,7 @@ import { WebhookService } from './shared/services/webhook.service';
     WhatsappModule,
   ],
   controllers: [],
-  providers: [WebhookService],
+  providers: [WebhookService, ExistsConstraint],
   exports: [WebhookService],
 })
-export class AppModule { }
+export class AppModule {}

@@ -1,9 +1,7 @@
-import { Exists } from 'src/shared/common/decorators';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class DeleteSessionDTO {
-    /**
-     * @todo testar validação
-     */
-    @Exists({ tableName: 'whatsapp_sessions', column: 'session_name' })
-    sessionName: string;
+  @IsString()
+  @IsNotEmpty()
+  sessionName: string;
 }
