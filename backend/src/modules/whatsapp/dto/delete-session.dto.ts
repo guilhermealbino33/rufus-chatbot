@@ -1,11 +1,7 @@
-import { Exists } from 'src/shared/common/decorators';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class DeleteSessionDTO {
-  /**
-   * @todo
-   * atualment estamos trabalhando sem migrations, então o @Exists está funcionando com o nome da tabela e coluna no banco de dados
-   * quando começarmos a trabalhar com migrations, precisaremos atualizar o @Exists para usar o nome da entidade e da propriedade
-   */
-  @Exists({ tableName: 'whatsapp_sessions', column: 'session_name' })
+  @IsString()
+  @IsNotEmpty()
   sessionName: string;
 }
