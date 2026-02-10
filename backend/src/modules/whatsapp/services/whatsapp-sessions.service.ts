@@ -152,6 +152,15 @@ export class WhatsappSessionsService {
   }
 
   async delete(sessionName: string): Promise<ApiResponse> {
+    const session = await this.sessionRepository.findOne({ where: { sessionName } });
+
+    if (!session) {
+      throw new NotFoundException({
+        success: false,
+        message: 'Session not found',
+      });
+    }
+
     try {
       // Delegate client cleanup to Manager
       await this.clientManager.removeClient(sessionName);
@@ -279,7 +288,9 @@ export class WhatsappSessionsService {
         },
         onStatusChange: (status, session) => {
           this.logger.log(`Status change for ${session}: ${status}`);
-          this.handleStatusChange(sessionName, status);
+          this.handleStatusChange(sessionName, status).catch((err) => {
+            this.logger.error(`Failed to persist status change for ${sessionName}: ${err.message}`);
+          });
         },
       };
 
