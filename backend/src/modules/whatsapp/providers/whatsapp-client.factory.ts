@@ -61,6 +61,14 @@ export class WhatsappClientFactory {
       options.catchQR = config.onQRCode;
     }
 
+    if (config.onLinkCode) {
+      options.catchLinkCode = config.onLinkCode;
+    }
+
+    if (config.phoneNumber) {
+      options.phoneNumber = config.phoneNumber;
+    }
+
     if (config.onStatusChange) {
       options.statusFind = config.onStatusChange;
     }

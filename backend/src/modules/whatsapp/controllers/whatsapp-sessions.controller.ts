@@ -8,7 +8,7 @@ export class WhatsappController {
 
   @Post('')
   async createSession(@Body() createSessionDto: CreateSessionDTO) {
-    return this.service.start(createSessionDto.sessionName);
+    return this.service.start(createSessionDto);
   }
 
   @Get('')
