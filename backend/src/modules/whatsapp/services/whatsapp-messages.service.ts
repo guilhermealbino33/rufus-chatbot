@@ -59,23 +59,31 @@ export class WhatsappMessagesService implements OnModuleInit {
     }
 
     try {
+      // Remove caracteres não numéricos
       const formattedPhone = phone.replace(/\D/g, '');
+
       // Basic format check
       if (formattedPhone.length < 10) {
         throw new BadRequestException('Invalid phone number format');
       }
 
+      // Monta o ID manualmente como fallback
       const chatId = `${formattedPhone}@c.us`;
 
       // Validate number with WPPConnect
+      // Nota: checkNumberStatus pode retornar numberExists: true mas sem o objeto id completo em alguns casos
       const resultCheck = await client.checkNumberStatus(chatId);
 
       if (!resultCheck.numberExists) {
         throw new BadRequestException(`Number ${phone} is not registered on WhatsApp`);
       }
 
-      // Use the valid serialized ID from the check result
-      const result = await client.sendText(resultCheck.id._serialized, message);
+      // CORREÇÃO APLICADA:
+      // Usamos optional chaining (?.) para verificar se .id existe.
+      // Se não existir, usamos o chatId que formatamos manualmente.
+      const to = resultCheck.id?._serialized || chatId;
+
+      const result = await client.sendText(to, message);
 
       return {
         success: true,
