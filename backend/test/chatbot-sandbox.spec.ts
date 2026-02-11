@@ -19,36 +19,48 @@ const mockRepository = {
   save: jest.fn(),
 };
 
+interface SutTypes {
+  sut: ChatbotService;
+  chatbotSessionRepositoryStub: any;
+  webhookServiceStub: any;
+}
+
+const makeSut = async (): Promise<SutTypes> => {
+  const module: TestingModule = await Test.createTestingModule({
+    providers: [
+      ChatbotService,
+      {
+        provide: WebhookService,
+        useValue: mockWebhookService,
+      },
+      {
+        provide: getRepositoryToken(ChatbotSession),
+        useValue: mockRepository,
+      },
+    ],
+  }).compile();
+
+  const sut = module.get<ChatbotService>(ChatbotService);
+  const chatbotSessionRepositoryStub = module.get(getRepositoryToken(ChatbotSession));
+  const webhookServiceStub = module.get(WebhookService);
+
+  jest.clearAllMocks();
+
+  return {
+    sut,
+    chatbotSessionRepositoryStub,
+    webhookServiceStub,
+  };
+};
+
 describe('Chatbot Sandbox', () => {
-  let service: ChatbotService;
-  let repository: any;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ChatbotService,
-        {
-          provide: WebhookService,
-          useValue: mockWebhookService,
-        },
-        {
-          provide: getRepositoryToken(ChatbotSession),
-          useValue: mockRepository,
-        },
-      ],
-    }).compile();
-
-    service = module.get<ChatbotService>(ChatbotService);
-    repository = module.get(getRepositoryToken(ChatbotSession));
-
-    jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  it('should be defined', async () => {
+    const { sut } = await makeSut();
+    expect(sut).toBeDefined();
   });
 
   it('should start a new session with START message if no session exists', async () => {
+    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
 
     // Mock finding no session
@@ -58,34 +70,30 @@ describe('Chatbot Sandbox', () => {
     mockRepository.create.mockReturnValue(newSession);
     mockRepository.save.mockResolvedValue(newSession);
 
-    const response = await service.processMessage(phone, 'Hi');
+    const response = await sut.processMessage(phone, 'Hi');
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({ where: { phone } });
-    expect(mockRepository.create).toHaveBeenCalledWith({
+    expect(chatbotSessionRepositoryStub.findOne).toHaveBeenCalledWith({ where: { phone } });
+    expect(chatbotSessionRepositoryStub.create).toHaveBeenCalledWith({
       phone,
       currentNode: 'START',
       context: {},
     });
-    expect(mockRepository.save).toHaveBeenCalled();
-    // Since we created a new session and logic says "process input against START node",
-    // "Hi" is not a valid option for START, so it should return invalid option message OR
-    // maybe we should change logic to return START message on new session regardless of input?
-    // Current logic: validates 'Hi' against START options. 'Hi' is invalid.
-    // Returns "Opção inválida... + START message"
+    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalled();
     expect(response).toContain('Opção inválida');
     expect(response).toContain(FUNNEL_TREE.START.message);
   });
 
   it('should process valid option 1 from START and move to FINANCEIRO_MENU', async () => {
+    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
     const currentSession = { phone, currentNode: 'START', context: {} };
 
     mockRepository.findOne.mockResolvedValue(currentSession);
     mockRepository.save.mockImplementation((s) => Promise.resolve(s));
 
-    const response = await service.processMessage(phone, '1');
+    const response = await sut.processMessage(phone, '1');
 
-    expect(repository.save).toHaveBeenCalledWith(
+    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledWith(
       expect.objectContaining({
         currentNode: 'FINANCEIRO_MENU',
       }),
@@ -94,34 +102,29 @@ describe('Chatbot Sandbox', () => {
   });
 
   it('should handle invalid option and stay on same node', async () => {
+    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
     const currentSession = { phone, currentNode: 'START', context: {} };
 
     mockRepository.findOne.mockResolvedValue(currentSession);
 
-    const response = await service.processMessage(phone, '99');
+    const response = await sut.processMessage(phone, '99');
 
-    // Should NOT update session (except maybe lastInteraction, but logic implies save is called only on nextNode)
-    // Wait, logic says:
-    // if invalid -> return error message.
-    // Update: logic implementation:
-    // if (currentNode.options[cleanInput]) { ... } else { return 'Invalid...' }
-    // So repository.save is NOT called for invalid input.
-
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(chatbotSessionRepositoryStub.save).not.toHaveBeenCalled();
     expect(response).toContain('Opção inválida');
   });
 
   it('should handle navigation back to START', async () => {
+    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
     const currentSession = { phone, currentNode: 'FINANCEIRO_MENU', context: {} };
 
     mockRepository.findOne.mockResolvedValue(currentSession);
     mockRepository.save.mockImplementation((s) => Promise.resolve(s));
 
-    const response = await service.processMessage(phone, '3'); // 3 is Back to START in Financeiro
+    const response = await sut.processMessage(phone, '3'); // 3 is Back to START in Financeiro
 
-    expect(repository.save).toHaveBeenCalledWith(
+    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledWith(
       expect.objectContaining({
         currentNode: 'START',
       }),
@@ -130,30 +133,17 @@ describe('Chatbot Sandbox', () => {
   });
 
   it('should handle CLOSE action', async () => {
+    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
-    // Mock session at a point where next step is close, e.g. PAYMENT_STATUS -> CLOSE
-    // Wait, PAYMENT_STATUS has action CLOSE immediately.
-    // But we need to Navigate TO it.
-    // Let's say we are at FINANCEIRO_MENU and choose 2 (PAYMENT_STATUS)
 
     const currentSession = { phone, currentNode: 'FINANCEIRO_MENU', context: {} };
     mockRepository.findOne.mockResolvedValue(currentSession);
     mockRepository.save.mockImplementation((s) => Promise.resolve(s));
 
-    const response = await service.processMessage(phone, '2');
+    const response = await sut.processMessage(phone, '2');
 
-    // It should update to PAYMENT_STATUS first
-    // Then check action CLOSE
-    // logic:
-    // if (nextNode.action === 'CLOSE') { session.currentNode = 'START'; save(session) }
-
-    // So we expect save to be called twice? Or once with START?
-    // Implementation:
-    // session.currentNode = nextNodeId; save();
-    // if (action == CLOSE) { session.currentNode = 'START'; save(); }
-
-    expect(repository.save).toHaveBeenCalledTimes(2);
-    expect(repository.save).toHaveBeenLastCalledWith(
+    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledTimes(2);
+    expect(chatbotSessionRepositoryStub.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         currentNode: 'START',
       }),
