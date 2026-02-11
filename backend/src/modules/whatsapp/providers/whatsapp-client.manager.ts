@@ -90,10 +90,20 @@ export class WhatsappClientManager implements OnModuleDestroy {
     }
 
     try {
-      await client.close();
+      this.logger.log(`⏳ Closing client for: ${sessionName}...`);
+
+      // Cria uma promise de timeout para não travar o shutdown
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout closing client')), 5000),
+      );
+
+      // Corrida entre o close() real e o timeout
+      await Promise.race([client.close(), timeoutPromise]);
+
       this.logger.log(`✅ Client closed for: ${sessionName}`);
     } catch (error) {
-      this.logger.error(`❌ Error closing client for ${sessionName}:`, error);
+      this.logger.error(`❌ Error closing client for ${sessionName}:`, error.message);
+      // Mesmo com erro, consideramos fechado para fins de limpeza
     } finally {
       // Remove da memória mesmo se o close falhar
       this.clients.delete(sessionName);
