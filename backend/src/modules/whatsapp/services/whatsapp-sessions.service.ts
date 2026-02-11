@@ -55,10 +55,17 @@ export class WhatsappSessionsService {
       session = this.sessionRepository.create({
         sessionName,
         status: SessionStatus.CONNECTING,
+        phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
       });
       await this.sessionRepository.save(session);
     } else {
-      await this.sessionRepository.update({ sessionName }, { status: SessionStatus.CONNECTING });
+      await this.sessionRepository.update(
+        { sessionName },
+        {
+          status: SessionStatus.CONNECTING,
+          phoneNumber: pairingMode === 'phone' ? phoneNumber : session.phoneNumber,
+        },
+      );
     }
 
     // 3. Initialize WPPConnect
@@ -382,6 +389,22 @@ export class WhatsappSessionsService {
     if (mappedStatus === SessionStatus.CONNECTED) {
       updateData.connectedAt = new Date();
       updateData.qrCode = null;
+
+      // Fetch real number on connection
+      try {
+        const client = this.clientManager.getClient(sessionName);
+        if (client) {
+          const device = await client.getHostDevice();
+          if (device && device.wid && device.wid.user) {
+            updateData.phoneNumber = device.wid.user;
+            this.logger.log(
+              `Session ${sessionName} connected with number: ${updateData.phoneNumber}`,
+            );
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Failed to fetch official phoneNumber for ${sessionName}: ${e.message}`);
+      }
     } else if (mappedStatus === SessionStatus.DISCONNECTED) {
       updateData.disconnectedAt = new Date();
     }
