@@ -1,4 +1,5 @@
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
+import { SessionStatus } from '../enums/whatsapp.enum';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -17,6 +18,12 @@ export interface QRCodeResponse {
   qrCode?: string;
   status: string;
   message?: string;
+}
+
+export interface WhatsappSessionStartResponse {
+  status: SessionStatus;
+  qrcode?: string;
+  code?: string;
 }
 
 /**

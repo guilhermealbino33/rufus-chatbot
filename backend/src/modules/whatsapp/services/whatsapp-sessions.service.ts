@@ -20,6 +20,7 @@ import {
   SessionStatusResponse,
   QRCodeResponse,
   PaginationResponse,
+  WhatsappSessionStartResponse,
 } from '../interfaces/whatsapp-common.interface';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 
@@ -34,17 +35,16 @@ export class WhatsappSessionsService {
     private webhookService: WebhookService,
   ) {}
 
-  async start(
-    createSessionDto: CreateSessionDTO,
-  ): Promise<{ status: 'QRCODE' | 'CONNECTED' | 'PAIRING_CODE'; qrcode?: string; code?: string }> {
+  async start(createSessionDto: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
     const { sessionName, pairingMode, phoneNumber } = createSessionDto;
+
     this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
 
     // 1. Check if session exists and is already connected in memory
     if (this.clientManager.hasClient(sessionName)) {
       const isConnected = await this.clientManager.isClientConnected(sessionName);
       if (isConnected) {
-        return { status: 'CONNECTED' };
+        return { status: SessionStatus.CONNECTED };
       }
     }
 
@@ -57,6 +57,7 @@ export class WhatsappSessionsService {
         status: SessionStatus.CONNECTING,
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
       });
+
       await this.sessionRepository.save(session);
     } else {
       await this.sessionRepository.update(
@@ -73,33 +74,32 @@ export class WhatsappSessionsService {
   }
 
   async checkStatus(sessionName: string): Promise<string> {
-    // 1. If we have client in memory, ask it directly
     if (this.clientManager.hasClient(sessionName)) {
       try {
         const isConnected = await this.clientManager.isClientConnected(sessionName);
         if (isConnected) return SessionStatus.CONNECTED;
 
-        // If not connected but client exists, check detailed state
         const state = await this.clientManager.getConnectionState(sessionName);
+
         if (state === 'CONNECTED') return SessionStatus.CONNECTED;
+
         return SessionStatus.DISCONNECTED;
       } catch (error) {
-        // Client might be dead (already handled by manager)
         return SessionStatus.DISCONNECTED;
       }
     }
 
-    // 2. If valid in DB but missing in memory -> Try Recovery
     const session = await this.sessionRepository.findOne({ where: { sessionName } });
-    if (!session) return SessionStatus.DISCONNECTED; // Unknown session
+    if (!session) return SessionStatus.DISCONNECTED;
 
-    // If DB says connected but we don't have it, we must recover
     if (session.status === 'connected' || session.status === SessionStatus.CONNECTED) {
       this.logger.log(
         `Session ${sessionName} found in DB as connected but missing from memory. Attempting recovery...`,
       );
-      this.recoverSession(sessionName); // Fire and forget
-      return SessionStatus.DISCONNECTED; // Or 'RECOVERING' if we add that enum
+
+      this.recoverSession(sessionName);
+
+      return SessionStatus.DISCONNECTED;
     }
 
     return session.status;
@@ -275,7 +275,7 @@ export class WhatsappSessionsService {
     sessionName: string,
     pairingMode: 'qrcode' | 'phone' = 'qrcode',
     phoneNumber?: string,
-  ): Promise<{ status: 'QRCODE' | 'CONNECTED' | 'PAIRING_CODE'; qrcode?: string; code?: string }> {
+  ): Promise<WhatsappSessionStartResponse> {
     return new Promise((resolve, reject) => {
       const timeoutMs = 20000;
       let isResolved = false;
@@ -295,7 +295,7 @@ export class WhatsappSessionsService {
             this.handleQRCode(sessionName, base64Qr);
             isResolved = true;
             clearTimeout(timeoutId);
-            resolve({ status: 'QRCODE', qrcode: base64Qr });
+            resolve({ status: SessionStatus.CONNECTING, qrcode: base64Qr });
           }
         },
         onLinkCode: (code) => {
@@ -304,7 +304,7 @@ export class WhatsappSessionsService {
             // We can optionally store this in DB if needed, but for now just return it
             isResolved = true;
             clearTimeout(timeoutId);
-            resolve({ status: 'PAIRING_CODE', code });
+            resolve({ status: SessionStatus.CONNECTING, code });
           }
         },
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
@@ -328,7 +328,7 @@ export class WhatsappSessionsService {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            resolve({ status: 'CONNECTED' });
+            resolve({ status: SessionStatus.CONNECTED });
           }
         })
         .catch((error) => {
@@ -351,7 +351,7 @@ export class WhatsappSessionsService {
         sessionName,
         onQRCode: (_base64Qr) => {
           // If it asks for QR during recovery, it means it's definitely disconnected
-          this.updateSessionStatus(sessionName, SessionStatus.QRCODE);
+          this.updateSessionStatus(sessionName, SessionStatus.CONNECTING);
         },
         onStatusChange: (status) => this.handleStatusChange(sessionName, status),
       };
@@ -367,7 +367,10 @@ export class WhatsappSessionsService {
   }
 
   private async handleQRCode(sessionName: string, qrCode: string): Promise<void> {
-    await this.sessionRepository.update({ sessionName }, { qrCode, status: SessionStatus.QRCODE });
+    await this.sessionRepository.update(
+      { sessionName },
+      { qrCode, status: SessionStatus.CONNECTING },
+    );
   }
 
   private async handleStatusChange(sessionName: string, status: string): Promise<void> {

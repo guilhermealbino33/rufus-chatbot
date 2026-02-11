@@ -71,7 +71,7 @@ describe('WhatsappSessionsService', () => {
 
       const result = await sut.start({ sessionName, phoneNumber: '5511999999999' });
 
-      expect(result).toEqual({ status: 'CONNECTED' });
+      expect(result).toEqual({ status: SessionStatus.CONNECTED });
       expect(clientManager.createClient).not.toHaveBeenCalled();
     });
 
@@ -98,7 +98,7 @@ describe('WhatsappSessionsService', () => {
       });
       expect(sessionRepository.save).toHaveBeenCalled();
       expect(clientManager.createClient).toHaveBeenCalled();
-      expect(result).toEqual({ status: 'CONNECTED' });
+      expect(result).toEqual({ status: SessionStatus.CONNECTED });
     });
 
     it('should return QRCODE status when onQRCode is triggered', async () => {
@@ -118,10 +118,10 @@ describe('WhatsappSessionsService', () => {
 
       const result = await sut.start({ sessionName, phoneNumber: '5511999999999' });
 
-      expect(result).toEqual({ status: 'QRCODE', qrcode: 'base64-code' });
+      expect(result).toEqual({ status: SessionStatus.CONNECTING, qrcode: 'base64-code' });
       expect(sessionRepository.update).toHaveBeenCalledWith(
         { sessionName },
-        { qrCode: 'base64-code', status: SessionStatus.QRCODE },
+        { qrCode: 'base64-code', status: SessionStatus.CONNECTING },
       );
     });
 
