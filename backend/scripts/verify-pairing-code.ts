@@ -8,7 +8,7 @@ async function testPairingCode() {
 
   try {
     console.log(`Creating session ${sessionName} with phone ${phoneNumber}...`);
-    const response = await axios.post('http://localhost:3000/whatsapp/sessions', {
+    const response = await axios.post('http://localhost:3000/api/whatsapp/sessions', {
       sessionName,
       pairingMode: 'phone',
       phoneNumber,
