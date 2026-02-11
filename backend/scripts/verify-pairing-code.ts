@@ -1,8 +1,10 @@
 import axios from 'axios';
+import { config } from '../src/crosscutting/config';
 
 async function testPairingCode() {
   const sessionName = 'test-pairing-' + Date.now();
-  const phoneNumber = '5511999999999'; // Replace with a valid number for real test if desired, but for mocked/dry-run checking flow is enough if we can't automate real WA interaction easily.
+  const phoneNumber = config.whatsapp.testPhoneNumber;
+
   // Actually, WPPConnect needs a real number to generate the code, otherwise it might fail or timeout?
   // If we just want to verify the API contract:
 
