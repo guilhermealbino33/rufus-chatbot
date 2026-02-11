@@ -22,7 +22,7 @@ import {
   PaginationResponse,
   WhatsappSessionStartResponse,
 } from '../interfaces/whatsapp-common.interface';
-import * as wppconnect from '@wppconnect-team/wppconnect';
+import { Message as WPPConnectMessage } from '@wppconnect-team/wppconnect';
 
 @Injectable()
 export class WhatsappSessionsService {
@@ -419,26 +419,97 @@ export class WhatsappSessionsService {
     await this.sessionRepository.update({ sessionName }, { status });
   }
 
-  private async handleIncomingMessage(
-    sessionName: string,
-    message: wppconnect.Message,
-  ): Promise<void> {
-    this.logger.debug(`Message received in ${sessionName} from ${message.from}`);
+  /**
+   * Safely extracts the remote JID (chat ID) from a WhatsApp message
+   * Handles different message formats and edge cases
+   */
+  private getRemoteJid(message: WPPConnectMessage): string | undefined {
+    if (!message) return undefined;
 
-    // Transform WPPConnect message to WhatsApp-specific format
-    const incomingMessage: IncomingWhatsappMessage = {
-      sessionId: sessionName,
-      from: typeof message.from === 'object' ? (message.from as any)._serialized : message.from,
-      body: message.body,
-      timestamp: new Date(),
-      isGroup: message.isGroupMsg || false,
-      chatId:
-        typeof message.chatId === 'object'
-          ? (message.chatId as any)._serialized
-          : message.chatId || message.from,
+    // Helper function to safely get ID from an object that might have _serialized
+    const getId = (obj: unknown): string | undefined => {
+      if (!obj) return undefined;
+      if (typeof obj === 'string') return obj;
+      if (typeof obj === 'object' && obj !== null) {
+        const withSerialized = obj as { _serialized?: unknown };
+        if (withSerialized._serialized && typeof withSerialized._serialized === 'string') {
+          return withSerialized._serialized;
+        }
+      }
+      return undefined;
     };
 
-    // Emit event via WebhookService (fire and forget)
-    this.webhookService.emitMessageReceived(incomingMessage);
+    // Try to get from known properties
+    const fromId = getId(message.from);
+    if (fromId) return fromId;
+
+    const chatId = getId(message.chatId);
+    if (chatId) return chatId;
+
+    // For group messages or other cases
+    // const messageId = message.id || 'unknown';
+
+    // if (messageId && messageId !== 'unknown') {
+    //   if (typeof messageId === 'object' && messageId !== null && 'id' in messageId) {
+    //     const idValue = (messageId as { id: unknown }).id;
+    //     if (idValue !== null && idValue !== undefined) {
+    //       const idStr = String(idValue);
+    //       const idParts = idStr.split('_');
+    //       if (idParts.length >= 2) {
+    //         return idParts[0]; // Usually the group/user ID
+    //       }
+    //     }
+    //   } else if (typeof messageId === 'string') {
+    //     const idParts = messageId.split('_');
+    //     if (idParts.length >= 2) {
+    //       return idParts[0];
+    //     }
+    //   }
+    // }
+
+    return undefined;
+  }
+
+  private async handleIncomingMessage(
+    sessionName: string,
+    message: WPPConnectMessage,
+  ): Promise<void> {
+    try {
+      if (!message) {
+        this.logger.warn(`[${sessionName}] Received null or undefined message object`);
+        return;
+      }
+
+      // 1. Extração simplificada e segura do ID
+      const messageId =
+        typeof message.id === 'object'
+          ? (message.id as any)?._serialized || (message.id as any)?.id?.toString()
+          : message.id?.toString() || 'unknown';
+
+      this.logger.debug(`[${sessionName}] Raw message: ${JSON.stringify(message, null, 2)}`);
+
+      const remoteJid = this.getRemoteJid(message);
+      if (!remoteJid) {
+        this.logger.warn(`[${sessionName}] Could not determine source:`, { messageId });
+        return;
+      }
+
+      // 2. Transformação com lógica mais clara
+      const incomingMessage: IncomingWhatsappMessage = {
+        sessionId: sessionName,
+        from: remoteJid,
+        body: message.body || '',
+        timestamp: message.t ? new Date(message.t * 1000) : new Date(),
+        isGroup: !!message.isGroupMsg,
+        chatId: remoteJid,
+        messageId: messageId !== 'unknown' ? messageId : undefined,
+        hasMedia: !!message.mediaKey,
+        isForwarded: !!message.isForwarded,
+      };
+
+      this.webhookService.emitMessageReceived(incomingMessage);
+    } catch (error) {
+      this.logger.error(`[${sessionName}] Error processing message:`, error);
+    }
   }
 }
