@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
 import { SessionStatus } from '../enums/whatsapp.enum';
-import { SearchSessionsDTO } from '../dto';
+import { SearchSessionsDTO, CreateSessionDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';
 import { IncomingWhatsappMessage } from '../../../shared/interfaces/messaging.interface';
@@ -34,8 +34,11 @@ export class WhatsappSessionsService {
     private webhookService: WebhookService,
   ) {}
 
-  async start(sessionName: string): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
-    this.logger.log(`Starting session: ${sessionName}`);
+  async start(
+    createSessionDto: CreateSessionDTO,
+  ): Promise<{ status: 'QRCODE' | 'CONNECTED' | 'PAIRING_CODE'; qrcode?: string; code?: string }> {
+    const { sessionName, pairingMode, phoneNumber } = createSessionDto;
+    this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
 
     // 1. Check if session exists and is already connected in memory
     if (this.clientManager.hasClient(sessionName)) {
@@ -59,7 +62,7 @@ export class WhatsappSessionsService {
     }
 
     // 3. Initialize WPPConnect
-    return this.initializeClient(sessionName);
+    return this.initializeClient(sessionName, pairingMode, phoneNumber);
   }
 
   async checkStatus(sessionName: string): Promise<string> {
@@ -263,7 +266,9 @@ export class WhatsappSessionsService {
 
   private initializeClient(
     sessionName: string,
-  ): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
+    pairingMode: 'qrcode' | 'phone' = 'qrcode',
+    phoneNumber?: string,
+  ): Promise<{ status: 'QRCODE' | 'CONNECTED' | 'PAIRING_CODE'; qrcode?: string; code?: string }> {
     return new Promise((resolve, reject) => {
       const timeoutMs = 20000;
       let isResolved = false;
@@ -278,7 +283,7 @@ export class WhatsappSessionsService {
       const config: WhatsappClientConfig = {
         sessionName,
         onQRCode: (base64Qr) => {
-          if (!isResolved) {
+          if (!isResolved && pairingMode === 'qrcode') {
             this.logger.log(`QR Code captured for ${sessionName}`);
             this.handleQRCode(sessionName, base64Qr);
             isResolved = true;
@@ -286,6 +291,16 @@ export class WhatsappSessionsService {
             resolve({ status: 'QRCODE', qrcode: base64Qr });
           }
         },
+        onLinkCode: (code) => {
+          if (!isResolved && pairingMode === 'phone') {
+            this.logger.log(`Link Code captured for ${sessionName}: ${code}`);
+            // We can optionally store this in DB if needed, but for now just return it
+            isResolved = true;
+            clearTimeout(timeoutId);
+            resolve({ status: 'PAIRING_CODE', code });
+          }
+        },
+        phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
         onStatusChange: (status, session) => {
           this.logger.log(`Status change for ${session}: ${status}`);
           this.handleStatusChange(sessionName, status).catch((err) => {

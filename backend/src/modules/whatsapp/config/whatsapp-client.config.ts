@@ -29,10 +29,16 @@ export interface WhatsappClientConfig {
   /** Tempo em milissegundos para auto-fechar o navegador (0 = nunca) */
   autoClose?: number;
 
+  /** Telefone para pareamento (apenas se pairingMode for 'phone') */
+  phoneNumber?: string;
+
   // ========== Callbacks de Eventos ==========
 
   /** Callback executado quando um QR Code é gerado */
   onQRCode?: (base64Qr: string, asciiQR: string) => void;
+
+  /** Callback executado quando um Código de Pareamento é gerado */
+  onLinkCode?: (code: string) => void;
 
   /** Callback executado quando o status da sessão muda */
   onStatusChange?: (status: string, session: string) => void;
