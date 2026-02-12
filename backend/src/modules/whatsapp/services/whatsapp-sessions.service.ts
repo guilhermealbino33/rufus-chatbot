@@ -35,8 +35,18 @@ export class WhatsappSessionsService {
     private webhookService: WebhookService,
   ) {}
 
-  async start(createSessionDto: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
-    const { sessionName, pairingMode, phoneNumber } = createSessionDto;
+  async start({
+    sessionName,
+    pairingMode,
+    phoneNumber,
+  }: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
+    let session = await this.sessionRepository.findOne({ where: { sessionName } });
+
+    if (session && session.status !== SessionStatus.CONNECTED) {
+      this.logger.log(`Session ${sessionName} already exists. Deleting...`);
+
+      await this.delete(sessionName);
+    }
 
     this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
 
@@ -49,7 +59,7 @@ export class WhatsappSessionsService {
     }
 
     // 2. Create or Update DB record
-    let session = await this.sessionRepository.findOne({ where: { sessionName } });
+    session = await this.sessionRepository.findOne({ where: { sessionName } });
 
     if (!session) {
       session = this.sessionRepository.create({
