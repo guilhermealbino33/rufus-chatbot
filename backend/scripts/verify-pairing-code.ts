@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { config } from '../src/crosscutting/config';
 
+/**
+ * @todo
+ *
+ * Verificar se este script é necessário
+ */
+
 async function testPairingCode() {
   const sessionName = 'test-pairing-' + Date.now();
   const phoneNumber = config.whatsapp.testPhoneNumber;
