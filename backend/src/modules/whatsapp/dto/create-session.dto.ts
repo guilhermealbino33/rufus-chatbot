@@ -8,6 +8,7 @@ import {
   IsEnum,
   ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateSessionDTO {
   @IsString()
@@ -26,6 +27,7 @@ export class CreateSessionDTO {
   @ValidateIf((o) => o.pairingMode === 'phone')
   @IsString()
   @IsNotEmpty({ message: 'Phone number is required when pairing mode is "phone"' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.replace(/\D/g, '') : value))
   @Matches(/^\d{10,15}$/, {
     message: 'Phone number must shorten international format (e.g. 5511999999999)',
   })
