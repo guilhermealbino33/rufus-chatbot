@@ -1,6 +1,7 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientConfig, DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
+import { BrowserAlreadyRunningException } from '../exceptions/browser-already-running.exception';
 
 /**
  * Factory responsável pela criação de instâncias do WPPConnect
@@ -33,6 +34,17 @@ export class WhatsappClientFactory {
       return client;
     } catch (error) {
       this.logger.error(`❌ Failed to create client for ${config.sessionName}:`, error);
+
+      // Detecta erro específico de browser já rodando
+      if (
+        error.message &&
+        (error.message.includes('browser is already running') ||
+          error.message.includes('Browser is already running'))
+      ) {
+        throw new BrowserAlreadyRunningException(config.sessionName);
+      }
+
+      // Outros erros mantêm comportamento original
       throw new InternalServerErrorException(`Failed to initialize WPPConnect: ${error.message}`);
     }
   }
@@ -59,6 +71,14 @@ export class WhatsappClientFactory {
     // Adicionar callbacks opcionais apenas se fornecidos
     if (config.onQRCode) {
       options.catchQR = config.onQRCode;
+    }
+
+    if (config.onLinkCode) {
+      options.catchLinkCode = config.onLinkCode;
+    }
+
+    if (config.phoneNumber) {
+      options.phoneNumber = config.phoneNumber;
     }
 
     if (config.onStatusChange) {

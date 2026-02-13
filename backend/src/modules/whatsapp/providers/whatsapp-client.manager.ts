@@ -20,6 +20,7 @@ import { WhatsappClientConfig } from '../config/whatsapp-client.config';
 export class WhatsappClientManager implements OnModuleDestroy {
   private readonly logger = new Logger(WhatsappClientManager.name);
   private readonly clients = new Map<string, wppconnect.Whatsapp>();
+  private readonly initializingClients = new Set<string>();
 
   constructor(private readonly factory: WhatsappClientFactory) {}
 
@@ -44,6 +45,37 @@ export class WhatsappClientManager implements OnModuleDestroy {
   }
 
   /**
+   * Verifica se uma sessão está em processo de inicialização
+   *
+   * @param sessionName - Nome da sessão
+   * @returns true se a sessão está sendo inicializada, false caso contrário
+   */
+  isClientInitializing(sessionName: string): boolean {
+    return this.initializingClients.has(sessionName);
+  }
+
+  /**
+   * Marca uma sessão como "em inicialização"
+   * Usado para implementar padrão Singleton por sessão
+   *
+   * @param sessionName - Nome da sessão
+   */
+  private markAsInitializing(sessionName: string): void {
+    this.initializingClients.add(sessionName);
+    this.logger.log(`🔄 Session ${sessionName} marked as initializing`);
+  }
+
+  /**
+   * Remove marca de "em inicialização"
+   *
+   * @param sessionName - Nome da sessão
+   */
+  private unmarkAsInitializing(sessionName: string): void {
+    this.initializingClients.delete(sessionName);
+    this.logger.log(`✅ Session ${sessionName} unmarked from initializing`);
+  }
+
+  /**
    * Cria e armazena um novo cliente WPPConnect
    *
    * Previne duplicação: se o cliente já existe, retorna o existente.
@@ -62,15 +94,29 @@ export class WhatsappClientManager implements OnModuleDestroy {
       return this.clients.get(sessionName)!;
     }
 
-    // Delega criação ao Factory
-    const client = await this.factory.create(config);
+    // Previne inicialização concorrente
+    if (this.initializingClients.has(sessionName)) {
+      throw new Error(`Session ${sessionName} is already being initialized`);
+    }
 
-    // Armazena em memória
-    this.clients.set(sessionName, client);
+    this.markAsInitializing(sessionName);
 
-    this.logger.log(`📦 Client stored in memory for: ${sessionName} (Total: ${this.clients.size})`);
+    try {
+      // Delega criação ao Factory
+      const client = await this.factory.create(config);
 
-    return client;
+      // Armazena em memória
+      this.clients.set(sessionName, client);
+
+      this.logger.log(
+        `📦 Client stored in memory for: ${sessionName} (Total: ${this.clients.size})`,
+      );
+
+      return client;
+    } finally {
+      // Sempre remove a marca de inicialização, mesmo em caso de erro
+      this.unmarkAsInitializing(sessionName);
+    }
   }
 
   /**
@@ -90,16 +136,64 @@ export class WhatsappClientManager implements OnModuleDestroy {
     }
 
     try {
-      await client.close();
+      this.logger.log(`⏳ Closing client for: ${sessionName}...`);
+
+      // Cria uma promise de timeout para não travar o shutdown
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout closing client')), 5000),
+      );
+
+      // Corrida entre o close() real e o timeout
+      await Promise.race([client.close(), timeoutPromise]);
+
       this.logger.log(`✅ Client closed for: ${sessionName}`);
     } catch (error) {
-      this.logger.error(`❌ Error closing client for ${sessionName}:`, error);
+      this.logger.error(`❌ Error closing client for ${sessionName}:`, error.message);
+      // Mesmo com erro, consideramos fechado para fins de limpeza
     } finally {
       // Remove da memória mesmo se o close falhar
       this.clients.delete(sessionName);
       this.logger.log(
         `🗑️ Client removed from memory: ${sessionName} (Remaining: ${this.clients.size})`,
       );
+    }
+  }
+
+  /**
+   * Tenta forçar o fechamento de um cliente travado
+   * Usa múltiplas estratégias progressivamente mais agressivas
+   *
+   * Esta é uma versão mais agressiva do removeClient, usada quando
+   * sabemos que o cliente está em estado inconsistente.
+   *
+   * @param sessionName - Nome da sessão
+   */
+  async forceCloseClient(sessionName: string): Promise<void> {
+    const client = this.clients.get(sessionName);
+
+    if (!client) {
+      this.logger.warn(`⚠️ No client found for ${sessionName} to force close`);
+      return;
+    }
+
+    this.logger.warn(`⚠️ Attempting force close for ${sessionName}...`);
+
+    try {
+      // Estratégia 1: Close normal com timeout curto (3s)
+      await Promise.race([
+        client.close(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000)),
+      ]);
+      this.logger.log(`✅ Force close succeeded for ${sessionName}`);
+    } catch (error) {
+      this.logger.error(`❌ Force close failed for ${sessionName}: ${error.message}`);
+      // Estratégia 2: Apenas remove da memória e loga o problema
+      this.logger.warn(
+        `⚠️ Client ${sessionName} may have orphaned browser process. Manual cleanup may be required.`,
+      );
+    } finally {
+      this.clients.delete(sessionName);
+      this.logger.log(`🗑️ Client removed from memory: ${sessionName}`);
     }
   }
 
