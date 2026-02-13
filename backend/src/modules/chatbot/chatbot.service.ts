@@ -34,17 +34,25 @@ export class ChatbotService implements OnModuleInit {
     this.logger.log(`Processing message from ${msg.from} in session ${msg.sessionId}`);
 
     // Extract phone number from remote JID (e.g. 5511999999999@c.us -> 5511999999999)
+    // This is used for chatbot session identification, NOT for sending responses
     const phone = msg.from.replace(/\D/g, '');
+
+    this.logger.debug(
+      `[${msg.sessionId}] Extracted phone for session: ${phone} (original JID: ${msg.from})`,
+    );
 
     const response = await this.processMessage(phone, msg.body);
 
     if (response) {
       // Emit outgoing message via WebhookService
+      // IMPORTANT: We preserve the original JID (msg.from) to maintain @lid or @c.us format
       const outgoingMessage: OutgoingWhatsappMessage = {
         sessionId: msg.sessionId,
-        to: msg.from,
+        to: msg.from, // ✅ Preserves @lid or @c.us format
         body: response,
       };
+
+      this.logger.debug(`[${msg.sessionId}] Emitting response to: ${outgoingMessage.to}`);
 
       this.webhookService.emitMessageSend(outgoingMessage);
     }

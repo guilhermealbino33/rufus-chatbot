@@ -35,6 +35,8 @@ export class WhatsappMessagesService implements OnModuleInit {
    */
   private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
     try {
+      this.logger.debug(`[${msg.sessionId}] Handling outgoing message to: ${msg.to}`);
+
       await this.send({
         sessionName: msg.sessionId,
         phone: msg.to,
@@ -59,31 +61,45 @@ export class WhatsappMessagesService implements OnModuleInit {
     }
 
     try {
-      // Remove caracteres não numéricos
-      const formattedPhone = phone.replace(/\D/g, '');
+      // Import JID utilities inline to avoid circular dependencies
+      const { normalizeJid, isLidJid } = await import('../utils/jid.utils');
 
-      // Basic format check
-      if (formattedPhone.length < 10) {
-        throw new BadRequestException('Invalid phone number format');
+      // Normalize the JID - this preserves @lid and @c.us formats, or converts pure numbers
+      const normalizedJid = normalizeJid(phone);
+
+      this.logger.debug(`[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`);
+
+      // For @lid identifiers, we send directly without checkNumberStatus
+      // because LIDs are already validated identifiers from incoming messages
+      if (isLidJid(normalizedJid)) {
+        this.logger.debug(
+          `[${sessionName}] Detected LID format, sending directly to: ${normalizedJid}`,
+        );
+
+        const result = await client.sendText(normalizedJid, message);
+
+        return {
+          success: true,
+          message: 'Message sent successfully',
+          data: result,
+        };
       }
 
-      // Monta o ID manualmente como fallback
-      const chatId = `${formattedPhone}@c.us`;
+      // For @c.us identifiers, validate with checkNumberStatus first
+      this.logger.debug(`[${sessionName}] Validating number status for: ${normalizedJid}`);
 
-      // Validate number with WPPConnect
-      // Nota: checkNumberStatus pode retornar numberExists: true mas sem o objeto id completo em alguns casos
-      const resultCheck = await client.checkNumberStatus(chatId);
+      const resultCheck = await client.checkNumberStatus(normalizedJid);
 
       if (!resultCheck.numberExists) {
         throw new BadRequestException(`Number ${phone} is not registered on WhatsApp`);
       }
 
-      // CORREÇÃO APLICADA:
-      // Usamos optional chaining (?.) para verificar se .id existe.
-      // Se não existir, usamos o chatId que formatamos manualmente.
-      const to = resultCheck.id?._serialized || chatId;
+      // Use the ID returned by checkNumberStatus if available, otherwise use normalized JID
+      const targetJid = resultCheck.id?._serialized || normalizedJid;
 
-      const result = await client.sendText(to, message);
+      this.logger.debug(`[${sessionName}] Sending message to: ${targetJid}`);
+
+      const result = await client.sendText(targetJid, message);
 
       return {
         success: true,

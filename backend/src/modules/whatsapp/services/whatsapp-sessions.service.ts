@@ -591,6 +591,8 @@ export class WhatsappSessionsService {
         return;
       }
 
+      this.logger.debug(`[${sessionName}] Extracted JID from message: ${remoteJid}`);
+
       // 2. Transformação com lógica mais clara
       const incomingMessage: IncomingWhatsappMessage = {
         sessionId: sessionName,

@@ -39,7 +39,13 @@ export interface OutgoingWhatsappMessage {
   /** Nome da sessão WhatsApp */
   sessionId: string;
 
-  /** Número do destinatário */
+  /**
+   * Número do destinatário
+   * Pode ser:
+   * - JID completo com @lid (ex: 257431800180973@lid)
+   * - JID completo com @c.us (ex: 5548991426316@c.us)
+   * - Número puro (ex: 5548991426316) - será convertido para @c.us
+   */
   to: string;
 
   /** Conteúdo da mensagem a enviar */
