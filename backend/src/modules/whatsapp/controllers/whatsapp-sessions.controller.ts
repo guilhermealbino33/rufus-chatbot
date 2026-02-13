@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Delete, Body, Param, Query } from '@nestjs/common';
 import { WhatsappSessionsService } from '../services/';
-import { CreateSessionDTO, SearchSessionsDTO, DeleteSessionDTO } from '../dto';
+import { CreateSessionDTO, SearchSessionsDTO } from '../dto';
 
 @Controller('whatsapp/sessions')
 export class WhatsappController {
@@ -8,7 +8,7 @@ export class WhatsappController {
 
   @Post('')
   async createSession(@Body() createSessionDto: CreateSessionDTO) {
-    return this.service.start(createSessionDto.sessionName);
+    return this.service.start(createSessionDto);
   }
 
   @Get('')
@@ -32,7 +32,7 @@ export class WhatsappController {
   }
 
   @Delete(':sessionName')
-  async deleteSession(@Param('sessionName') { sessionName }: DeleteSessionDTO) {
+  async deleteSession(@Param('sessionName') sessionName: string) {
     return this.service.delete(sessionName);
   }
 }

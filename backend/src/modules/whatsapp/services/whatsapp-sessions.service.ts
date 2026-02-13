@@ -5,12 +5,13 @@ import {
   RequestTimeoutException,
   InternalServerErrorException,
   HttpException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
 import { SessionStatus } from '../enums/whatsapp.enum';
-import { SearchSessionsDTO } from '../dto';
+import { SearchSessionsDTO, CreateSessionDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';
 import { IncomingWhatsappMessage } from '../../../shared/interfaces/messaging.interface';
@@ -20,8 +21,9 @@ import {
   SessionStatusResponse,
   QRCodeResponse,
   PaginationResponse,
+  WhatsappSessionStartResponse,
 } from '../interfaces/whatsapp-common.interface';
-import * as wppconnect from '@wppconnect-team/wppconnect';
+import { Message as WPPConnectMessage } from '@wppconnect-team/wppconnect';
 
 @Injectable()
 export class WhatsappSessionsService {
@@ -34,62 +36,109 @@ export class WhatsappSessionsService {
     private webhookService: WebhookService,
   ) {}
 
-  async start(sessionName: string): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
-    this.logger.log(`Starting session: ${sessionName}`);
+  async start({
+    sessionName,
+    pairingMode,
+    phoneNumber,
+  }: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
+    // ========== ETAPA 1: Verificação de Singleton ==========
+    // Previne múltiplas inicializações simultâneas
+    if (this.clientManager.isClientInitializing(sessionName)) {
+      throw new ConflictException({
+        success: false,
+        message: `Sessão ${sessionName} já está em processo de inicialização`,
+        error: 'SESSION_ALREADY_INITIALIZING',
+      });
+    }
 
-    // 1. Check if session exists and is already connected in memory
+    // ========== ETAPA 2: Verificação de Instância em Memória ==========
     if (this.clientManager.hasClient(sessionName)) {
       const isConnected = await this.clientManager.isClientConnected(sessionName);
       if (isConnected) {
-        return { status: 'CONNECTED' };
+        this.logger.log(`Session ${sessionName} already connected in memory`);
+        return { status: SessionStatus.CONNECTED };
+      }
+
+      // Cliente existe mas não está conectado - fazer cleanup
+      this.logger.warn(`Session ${sessionName} exists in memory but not connected. Cleaning up...`);
+      await this.clientManager.forceCloseClient(sessionName);
+    }
+
+    // ========== ETAPA 3: Verificação de Estado no Banco ==========
+    let session = await this.sessionRepository.findOne({ where: { sessionName } });
+
+    // Se sessão existe e está em estado não-final, fazer cleanup
+    if (session) {
+      if (session.status === SessionStatus.CONNECTING) {
+        // Sessão travada em CONNECTING - provavelmente de uma tentativa anterior que falhou
+        this.logger.warn(`Session ${sessionName} stuck in CONNECTING state. Attempting cleanup...`);
+        await this.cleanupStuckSession(sessionName);
+        session = null; // Reset para criar nova
+      } else if (session.status !== SessionStatus.CONNECTED) {
+        this.logger.log(`Session ${sessionName} exists with status ${session.status}. Deleting...`);
+        await this.delete(sessionName);
+        session = null; // Reset para criar nova
       }
     }
 
-    // 2. Create or Update DB record
-    let session = await this.sessionRepository.findOne({ where: { sessionName } });
-
+    // ========== ETAPA 4: Criar/Atualizar Registro no Banco ==========
     if (!session) {
       session = this.sessionRepository.create({
         sessionName,
         status: SessionStatus.CONNECTING,
+        phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
       });
       await this.sessionRepository.save(session);
+      this.logger.log(`Session ${sessionName} created with CONNECTING status`);
     } else {
-      await this.sessionRepository.update({ sessionName }, { status: SessionStatus.CONNECTING });
+      await this.sessionRepository.update(
+        { sessionName },
+        {
+          status: SessionStatus.CONNECTING,
+          phoneNumber: pairingMode === 'phone' ? phoneNumber : session.phoneNumber,
+        },
+      );
+      this.logger.log(`Session ${sessionName} updated to CONNECTING status`);
     }
 
-    // 3. Initialize WPPConnect
-    return this.initializeClient(sessionName);
+    // ========== ETAPA 5: Inicializar Cliente WPPConnect ==========
+    try {
+      this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
+      return await this.initializeClient(sessionName, pairingMode, phoneNumber);
+    } catch (error) {
+      // Rollback do estado em caso de erro
+      await this.handleInitializationError(sessionName, error);
+      throw error; // Re-lança para o controller tratar
+    }
   }
 
   async checkStatus(sessionName: string): Promise<string> {
-    // 1. If we have client in memory, ask it directly
     if (this.clientManager.hasClient(sessionName)) {
       try {
         const isConnected = await this.clientManager.isClientConnected(sessionName);
         if (isConnected) return SessionStatus.CONNECTED;
 
-        // If not connected but client exists, check detailed state
         const state = await this.clientManager.getConnectionState(sessionName);
+
         if (state === 'CONNECTED') return SessionStatus.CONNECTED;
+
         return SessionStatus.DISCONNECTED;
       } catch (error) {
-        // Client might be dead (already handled by manager)
         return SessionStatus.DISCONNECTED;
       }
     }
 
-    // 2. If valid in DB but missing in memory -> Try Recovery
     const session = await this.sessionRepository.findOne({ where: { sessionName } });
-    if (!session) return SessionStatus.DISCONNECTED; // Unknown session
+    if (!session) return SessionStatus.DISCONNECTED;
 
-    // If DB says connected but we don't have it, we must recover
     if (session.status === 'connected' || session.status === SessionStatus.CONNECTED) {
       this.logger.log(
         `Session ${sessionName} found in DB as connected but missing from memory. Attempting recovery...`,
       );
-      this.recoverSession(sessionName); // Fire and forget
-      return SessionStatus.DISCONNECTED; // Or 'RECOVERING' if we add that enum
+
+      this.recoverSession(sessionName);
+
+      return SessionStatus.DISCONNECTED;
     }
 
     return session.status;
@@ -263,7 +312,9 @@ export class WhatsappSessionsService {
 
   private initializeClient(
     sessionName: string,
-  ): Promise<{ status: 'QRCODE' | 'CONNECTED'; qrcode?: string }> {
+    pairingMode: 'qrcode' | 'phone' = 'qrcode',
+    phoneNumber?: string,
+  ): Promise<WhatsappSessionStartResponse> {
     return new Promise((resolve, reject) => {
       const timeoutMs = 20000;
       let isResolved = false;
@@ -278,14 +329,24 @@ export class WhatsappSessionsService {
       const config: WhatsappClientConfig = {
         sessionName,
         onQRCode: (base64Qr) => {
-          if (!isResolved) {
+          if (!isResolved && pairingMode === 'qrcode') {
             this.logger.log(`QR Code captured for ${sessionName}`);
             this.handleQRCode(sessionName, base64Qr);
             isResolved = true;
             clearTimeout(timeoutId);
-            resolve({ status: 'QRCODE', qrcode: base64Qr });
+            resolve({ status: SessionStatus.CONNECTING, qrcode: base64Qr });
           }
         },
+        onLinkCode: (code) => {
+          if (!isResolved && pairingMode === 'phone') {
+            this.logger.log(`Link Code captured for ${sessionName}: ${code}`);
+            // We can optionally store this in DB if needed, but for now just return it
+            isResolved = true;
+            clearTimeout(timeoutId);
+            resolve({ status: SessionStatus.CONNECTING, code });
+          }
+        },
+        phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
         onStatusChange: (status, session) => {
           this.logger.log(`Status change for ${session}: ${status}`);
           this.handleStatusChange(sessionName, status).catch((err) => {
@@ -306,7 +367,7 @@ export class WhatsappSessionsService {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            resolve({ status: 'CONNECTED' });
+            resolve({ status: SessionStatus.CONNECTED });
           }
         })
         .catch((error) => {
@@ -329,7 +390,7 @@ export class WhatsappSessionsService {
         sessionName,
         onQRCode: (_base64Qr) => {
           // If it asks for QR during recovery, it means it's definitely disconnected
-          this.updateSessionStatus(sessionName, SessionStatus.QRCODE);
+          this.updateSessionStatus(sessionName, SessionStatus.CONNECTING);
         },
         onStatusChange: (status) => this.handleStatusChange(sessionName, status),
       };
@@ -344,8 +405,69 @@ export class WhatsappSessionsService {
     }
   }
 
+  /**
+   * Tenta limpar uma sessão travada em estado CONNECTING
+   *
+   * Esta função é chamada quando detectamos que uma sessão está
+   * travada no estado CONNECTING de uma tentativa anterior que falhou.
+   *
+   * @param sessionName - Nome da sessão
+   */
+  private async cleanupStuckSession(sessionName: string): Promise<void> {
+    try {
+      // Tenta forçar fechamento se houver cliente em memória
+      if (this.clientManager.hasClient(sessionName)) {
+        await this.clientManager.forceCloseClient(sessionName);
+      }
+
+      // Atualiza estado para DISCONNECTED
+      await this.sessionRepository.update({ sessionName }, { status: SessionStatus.DISCONNECTED });
+
+      this.logger.log(`Stuck session ${sessionName} cleaned up`);
+    } catch (error) {
+      this.logger.error(`Failed to cleanup stuck session ${sessionName}: ${error.message}`);
+      // Não lança erro - apenas loga
+    }
+  }
+
+  /**
+   * Trata erros de inicialização e faz rollback do estado
+   *
+   * Quando a inicialização do WPPConnect falha, precisamos:
+   * 1. Atualizar o estado da sessão no banco para DISCONNECTED
+   * 2. Limpar o QR Code armazenado
+   * 3. Remover o cliente da memória se existir
+   *
+   * @param sessionName - Nome da sessão
+   * @param error - Erro que causou a falha
+   */
+  private async handleInitializationError(sessionName: string, error: any): Promise<void> {
+    this.logger.error(`Initialization failed for ${sessionName}: ${error.message}`);
+
+    try {
+      // Atualiza estado para DISCONNECTED
+      await this.sessionRepository.update(
+        { sessionName },
+        {
+          status: SessionStatus.DISCONNECTED,
+          qrCode: null,
+        },
+      );
+
+      // Remove cliente da memória se existir
+      if (this.clientManager.hasClient(sessionName)) {
+        await this.clientManager.forceCloseClient(sessionName);
+      }
+    } catch (rollbackError) {
+      this.logger.error(`Failed to rollback session ${sessionName}: ${rollbackError.message}`);
+    }
+  }
+
   private async handleQRCode(sessionName: string, qrCode: string): Promise<void> {
-    await this.sessionRepository.update({ sessionName }, { qrCode, status: SessionStatus.QRCODE });
+    await this.sessionRepository.update(
+      { sessionName },
+      { qrCode, status: SessionStatus.CONNECTING },
+    );
   }
 
   private async handleStatusChange(sessionName: string, status: string): Promise<void> {
@@ -367,6 +489,22 @@ export class WhatsappSessionsService {
     if (mappedStatus === SessionStatus.CONNECTED) {
       updateData.connectedAt = new Date();
       updateData.qrCode = null;
+
+      // Fetch real number on connection
+      try {
+        const client = this.clientManager.getClient(sessionName);
+        if (client) {
+          const device = await client.getHostDevice();
+          if (device && device.wid && device.wid.user) {
+            updateData.phoneNumber = device.wid.user;
+            this.logger.log(
+              `Session ${sessionName} connected with number: ${updateData.phoneNumber}`,
+            );
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Failed to fetch official phoneNumber for ${sessionName}: ${e.message}`);
+      }
     } else if (mappedStatus === SessionStatus.DISCONNECTED) {
       updateData.disconnectedAt = new Date();
     }
@@ -378,26 +516,99 @@ export class WhatsappSessionsService {
     await this.sessionRepository.update({ sessionName }, { status });
   }
 
-  private async handleIncomingMessage(
-    sessionName: string,
-    message: wppconnect.Message,
-  ): Promise<void> {
-    this.logger.debug(`Message received in ${sessionName} from ${message.from}`);
+  /**
+   * Safely extracts the remote JID (chat ID) from a WhatsApp message
+   * Handles different message formats and edge cases
+   */
+  private getRemoteJid(message: WPPConnectMessage): string | undefined {
+    if (!message) return undefined;
 
-    // Transform WPPConnect message to WhatsApp-specific format
-    const incomingMessage: IncomingWhatsappMessage = {
-      sessionId: sessionName,
-      from: typeof message.from === 'object' ? (message.from as any)._serialized : message.from,
-      body: message.body,
-      timestamp: new Date(),
-      isGroup: message.isGroupMsg || false,
-      chatId:
-        typeof message.chatId === 'object'
-          ? (message.chatId as any)._serialized
-          : message.chatId || message.from,
+    // Helper function to safely get ID from an object that might have _serialized
+    const getId = (obj: unknown): string | undefined => {
+      if (!obj) return undefined;
+      if (typeof obj === 'string') return obj;
+      if (typeof obj === 'object' && obj !== null) {
+        const withSerialized = obj as { _serialized?: unknown };
+        if (withSerialized._serialized && typeof withSerialized._serialized === 'string') {
+          return withSerialized._serialized;
+        }
+      }
+      return undefined;
     };
 
-    // Emit event via WebhookService (fire and forget)
-    this.webhookService.emitMessageReceived(incomingMessage);
+    // Try to get from known properties
+    const fromId = getId(message.from);
+    if (fromId) return fromId;
+
+    const chatId = getId(message.chatId);
+    if (chatId) return chatId;
+
+    // For group messages or other cases
+    // const messageId = message.id || 'unknown';
+
+    // if (messageId && messageId !== 'unknown') {
+    //   if (typeof messageId === 'object' && messageId !== null && 'id' in messageId) {
+    //     const idValue = (messageId as { id: unknown }).id;
+    //     if (idValue !== null && idValue !== undefined) {
+    //       const idStr = String(idValue);
+    //       const idParts = idStr.split('_');
+    //       if (idParts.length >= 2) {
+    //         return idParts[0]; // Usually the group/user ID
+    //       }
+    //     }
+    //   } else if (typeof messageId === 'string') {
+    //     const idParts = messageId.split('_');
+    //     if (idParts.length >= 2) {
+    //       return idParts[0];
+    //     }
+    //   }
+    // }
+
+    return undefined;
+  }
+
+  private async handleIncomingMessage(
+    sessionName: string,
+    message: WPPConnectMessage,
+  ): Promise<void> {
+    try {
+      if (!message) {
+        this.logger.warn(`[${sessionName}] Received null or undefined message object`);
+        return;
+      }
+
+      // 1. Extração simplificada e segura do ID
+      const messageId =
+        typeof message.id === 'object'
+          ? (message.id as any)?._serialized || (message.id as any)?.id?.toString()
+          : message.id?.toString() || 'unknown';
+
+      this.logger.debug(`[${sessionName}] Raw message: ${JSON.stringify(message, null, 2)}`);
+
+      const remoteJid = this.getRemoteJid(message);
+      if (!remoteJid) {
+        this.logger.warn(`[${sessionName}] Could not determine source:`, { messageId });
+        return;
+      }
+
+      this.logger.debug(`[${sessionName}] Extracted JID from message: ${remoteJid}`);
+
+      // 2. Transformação com lógica mais clara
+      const incomingMessage: IncomingWhatsappMessage = {
+        sessionId: sessionName,
+        from: remoteJid,
+        body: message.body || '',
+        timestamp: message.t ? new Date(message.t * 1000) : new Date(),
+        isGroup: !!message.isGroupMsg,
+        chatId: remoteJid,
+        messageId: messageId !== 'unknown' ? messageId : undefined,
+        hasMedia: !!message.mediaKey,
+        isForwarded: !!message.isForwarded,
+      };
+
+      this.webhookService.emitMessageReceived(incomingMessage);
+    } catch (error) {
+      this.logger.error(`[${sessionName}] Error processing message:`, error);
+    }
   }
 }

@@ -1,51 +1,91 @@
 export interface FunnelStep {
-    id: string;
-    message: string;
-    options?: Record<string, string>; // Opção (1, 2) -> Próximo ID do Passo
-    action?: 'HANDOFF' | 'CLOSE'; // Ações especiais
+  id: string;
+  message: string;
+  type?: 'text' | 'image' | 'video' | 'audio';
+  mediaUrl?: string;
+  options?: Record<string, string>; // User Input -> Next Step ID
+  fallbackNodeId?: string;
+  action?: 'HANDOFF' | 'CLOSE';
 }
 
 export const FUNNEL_TREE: Record<string, FunnelStep> = {
-    START: {
-        id: 'START',
-        message: 'Olá! Bem-vindo ao Suporte. Escolha uma opção:\n1. Financeiro\n2. Suporte Técnico\n3. Fale com um de nossos atendentes',
-        options: {
-            '1': 'FINANCEIRO_MENU',
-            '2': 'SUPORTE_MENU',
-            '3': 'HUMAN_HANDOFF',
-        },
+  START: {
+    id: 'START',
+    message:
+      'Olá! Bem-vindo ao Suporte da Rufus. Como podemos ajudar hoje?\n\n1. Financeiro 💰\n2. Suporte Técnico 🛠️\n3. Fale com um atendente 👩‍💼',
+    options: {
+      '1': 'FINANCEIRO_MENU',
+      '2': 'SUPORTE_MENU',
+      '3': 'HUMAN_HANDOFF',
     },
-    FINANCEIRO_MENU: {
-        id: 'FINANCEIRO_MENU',
-        message: 'Setor Financeiro. Digite:\n1. 2ª via de boleto\n2. Voltar',
-        options: {
-            '1': 'BOLETO_ACTION',
-            '2': 'START'
-        }
+    fallbackNodeId: 'START',
+  },
+  FINANCEIRO_MENU: {
+    id: 'FINANCEIRO_MENU',
+    message:
+      'Setor Financeiro. Por favor, escolha uma opção:\n\n1. 2ª via de boleto 📄\n2. Status de pagamento 💳\n3. Voltar ao menu principal 🔙',
+    options: {
+      '1': 'BOLETO_ACTION',
+      '2': 'PAYMENT_STATUS',
+      '3': 'START',
     },
-    SUPORTE_MENU: {
-        id: 'SUPORTE_MENU',
-        message: 'Suporte Técnico. Digite:\n1. Problemas de acesso\n2. Voltar',
-        options: {
-            '1': 'ACCESS_ISSUE',
-            '2': 'START'
-        }
+    fallbackNodeId: 'FINANCEIRO_MENU',
+  },
+  SUPORTE_MENU: {
+    id: 'SUPORTE_MENU',
+    message:
+      'Suporte Técnico. Como podemos ajudar?\n\n1. Problemas de acesso 🔐\n2. Dúvidas sobre o sistema ❓\n3. Voltar ao menu principal 🔙',
+    options: {
+      '1': 'ACCESS_ISSUE',
+      '2': 'SYSTEM_FAQ',
+      '3': 'START',
     },
-    HUMAN_HANDOFF: {
-        id: 'HUMAN_HANDOFF',
-        message: 'Aguarde, estamos transferindo para um atendente...',
-        action: 'HANDOFF'
+    fallbackNodeId: 'SUPORTE_MENU',
+  },
+  HUMAN_HANDOFF: {
+    id: 'HUMAN_HANDOFF',
+    message:
+      'Entendido. Estou transferindo seu atendimento para um de nossos especialistas. Por favor, aguarde um momento...',
+    action: 'HANDOFF',
+  },
+  ACCESS_ISSUE: {
+    id: 'ACCESS_ISSUE',
+    message:
+      'Para redefinir sua senha, acesse o portal do cliente e clique em "Esqueci minha senha".\n\nIsso resolveu seu problema?\n1. Sim 👍\n2. Não, preciso de mais ajuda 👎',
+    options: {
+      '1': 'FEEDBACK_POSITIVE',
+      '2': 'HUMAN_HANDOFF',
     },
-    ACCESS_ISSUE: {
-        id: 'ACCESS_ISSUE',
-        message: 'Para resetar sua senha, acesse nosso portal. Deseja algo mais?',
-        options: {
-            '1': 'START'
-        }
+    fallbackNodeId: 'ACCESS_ISSUE',
+  },
+  SYSTEM_FAQ: {
+    id: 'SYSTEM_FAQ',
+    message:
+      'Você pode consultar nosso FAQ completo em: https://ajuda.rufus.com.br\n\nDeseja voltar ao menu?\n1. Sim\n2. Encerrar atendimento',
+    options: {
+      '1': 'START',
+      '2': 'CLOSE_CONVERSATION',
     },
-    BOLETO_ACTION: {
-        id: 'BOLETO_ACTION',
-        message: 'Seu boleto foi enviado para o email cadastrado. Obrigado!',
-        action: 'CLOSE'
-    }
+  },
+  BOLETO_ACTION: {
+    id: 'BOLETO_ACTION',
+    message:
+      'Enviamos a 2ª via do boleto para o seu e-mail cadastrado. Verifique sua caixa de entrada (e spam).',
+    action: 'CLOSE',
+  },
+  PAYMENT_STATUS: {
+    id: 'PAYMENT_STATUS',
+    message: 'Seu último pagamento foi processado com sucesso em 10/02/2026.',
+    action: 'CLOSE',
+  },
+  FEEDBACK_POSITIVE: {
+    id: 'FEEDBACK_POSITIVE',
+    message: 'Ótimo! Fico feliz em ter ajudado. Até a próxima! 👋',
+    action: 'CLOSE',
+  },
+  CLOSE_CONVERSATION: {
+    id: 'CLOSE_CONVERSATION',
+    message: 'Obrigado pelo contato. Tenha um ótimo dia! 👋',
+    action: 'CLOSE',
+  },
 };
