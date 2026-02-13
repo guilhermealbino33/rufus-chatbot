@@ -5,6 +5,7 @@ import {
   RequestTimeoutException,
   InternalServerErrorException,
   HttpException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -40,35 +41,55 @@ export class WhatsappSessionsService {
     pairingMode,
     phoneNumber,
   }: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
-    let session = await this.sessionRepository.findOne({ where: { sessionName } });
-
-    if (session && session.status !== SessionStatus.CONNECTED) {
-      this.logger.log(`Session ${sessionName} already exists. Deleting...`);
-
-      await this.delete(sessionName);
+    // ========== ETAPA 1: Verificação de Singleton ==========
+    // Previne múltiplas inicializações simultâneas
+    if (this.clientManager.isClientInitializing(sessionName)) {
+      throw new ConflictException({
+        success: false,
+        message: `Sessão ${sessionName} já está em processo de inicialização`,
+        error: 'SESSION_ALREADY_INITIALIZING',
+      });
     }
 
-    this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
-
-    // 1. Check if session exists and is already connected in memory
+    // ========== ETAPA 2: Verificação de Instância em Memória ==========
     if (this.clientManager.hasClient(sessionName)) {
       const isConnected = await this.clientManager.isClientConnected(sessionName);
       if (isConnected) {
+        this.logger.log(`Session ${sessionName} already connected in memory`);
         return { status: SessionStatus.CONNECTED };
+      }
+
+      // Cliente existe mas não está conectado - fazer cleanup
+      this.logger.warn(`Session ${sessionName} exists in memory but not connected. Cleaning up...`);
+      await this.clientManager.forceCloseClient(sessionName);
+    }
+
+    // ========== ETAPA 3: Verificação de Estado no Banco ==========
+    let session = await this.sessionRepository.findOne({ where: { sessionName } });
+
+    // Se sessão existe e está em estado não-final, fazer cleanup
+    if (session) {
+      if (session.status === SessionStatus.CONNECTING) {
+        // Sessão travada em CONNECTING - provavelmente de uma tentativa anterior que falhou
+        this.logger.warn(`Session ${sessionName} stuck in CONNECTING state. Attempting cleanup...`);
+        await this.cleanupStuckSession(sessionName);
+        session = null; // Reset para criar nova
+      } else if (session.status !== SessionStatus.CONNECTED) {
+        this.logger.log(`Session ${sessionName} exists with status ${session.status}. Deleting...`);
+        await this.delete(sessionName);
+        session = null; // Reset para criar nova
       }
     }
 
-    // 2. Create or Update DB record
-    session = await this.sessionRepository.findOne({ where: { sessionName } });
-
+    // ========== ETAPA 4: Criar/Atualizar Registro no Banco ==========
     if (!session) {
       session = this.sessionRepository.create({
         sessionName,
         status: SessionStatus.CONNECTING,
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
       });
-
       await this.sessionRepository.save(session);
+      this.logger.log(`Session ${sessionName} created with CONNECTING status`);
     } else {
       await this.sessionRepository.update(
         { sessionName },
@@ -77,10 +98,18 @@ export class WhatsappSessionsService {
           phoneNumber: pairingMode === 'phone' ? phoneNumber : session.phoneNumber,
         },
       );
+      this.logger.log(`Session ${sessionName} updated to CONNECTING status`);
     }
 
-    // 3. Initialize WPPConnect
-    return this.initializeClient(sessionName, pairingMode, phoneNumber);
+    // ========== ETAPA 5: Inicializar Cliente WPPConnect ==========
+    try {
+      this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
+      return await this.initializeClient(sessionName, pairingMode, phoneNumber);
+    } catch (error) {
+      // Rollback do estado em caso de erro
+      await this.handleInitializationError(sessionName, error);
+      throw error; // Re-lança para o controller tratar
+    }
   }
 
   async checkStatus(sessionName: string): Promise<string> {
@@ -373,6 +402,64 @@ export class WhatsappSessionsService {
     } catch (e) {
       this.logger.error(`Failed to recover session ${sessionName}: ${e.message}`);
       this.updateSessionStatus(sessionName, SessionStatus.DISCONNECTED);
+    }
+  }
+
+  /**
+   * Tenta limpar uma sessão travada em estado CONNECTING
+   *
+   * Esta função é chamada quando detectamos que uma sessão está
+   * travada no estado CONNECTING de uma tentativa anterior que falhou.
+   *
+   * @param sessionName - Nome da sessão
+   */
+  private async cleanupStuckSession(sessionName: string): Promise<void> {
+    try {
+      // Tenta forçar fechamento se houver cliente em memória
+      if (this.clientManager.hasClient(sessionName)) {
+        await this.clientManager.forceCloseClient(sessionName);
+      }
+
+      // Atualiza estado para DISCONNECTED
+      await this.sessionRepository.update({ sessionName }, { status: SessionStatus.DISCONNECTED });
+
+      this.logger.log(`Stuck session ${sessionName} cleaned up`);
+    } catch (error) {
+      this.logger.error(`Failed to cleanup stuck session ${sessionName}: ${error.message}`);
+      // Não lança erro - apenas loga
+    }
+  }
+
+  /**
+   * Trata erros de inicialização e faz rollback do estado
+   *
+   * Quando a inicialização do WPPConnect falha, precisamos:
+   * 1. Atualizar o estado da sessão no banco para DISCONNECTED
+   * 2. Limpar o QR Code armazenado
+   * 3. Remover o cliente da memória se existir
+   *
+   * @param sessionName - Nome da sessão
+   * @param error - Erro que causou a falha
+   */
+  private async handleInitializationError(sessionName: string, error: any): Promise<void> {
+    this.logger.error(`Initialization failed for ${sessionName}: ${error.message}`);
+
+    try {
+      // Atualiza estado para DISCONNECTED
+      await this.sessionRepository.update(
+        { sessionName },
+        {
+          status: SessionStatus.DISCONNECTED,
+          qrCode: null,
+        },
+      );
+
+      // Remove cliente da memória se existir
+      if (this.clientManager.hasClient(sessionName)) {
+        await this.clientManager.forceCloseClient(sessionName);
+      }
+    } catch (rollbackError) {
+      this.logger.error(`Failed to rollback session ${sessionName}: ${rollbackError.message}`);
     }
   }
 
