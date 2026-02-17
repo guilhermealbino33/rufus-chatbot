@@ -1,3 +1,5 @@
+import { FlowAction } from './enums/flow-action.enum';
+
 export interface FunnelStep {
   id: string;
   message: string;
@@ -5,7 +7,7 @@ export interface FunnelStep {
   mediaUrl?: string;
   options?: Record<string, string>; // User Input -> Next Step ID
   fallbackNodeId?: string;
-  action?: 'HANDOFF' | 'CLOSE';
+  action?: FlowAction;
 }
 
 export const FUNNEL_TREE: Record<string, FunnelStep> = {
@@ -46,7 +48,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     id: 'HUMAN_HANDOFF',
     message:
       'Entendido. Estou transferindo seu atendimento para um de nossos especialistas. Por favor, aguarde um momento...',
-    action: 'HANDOFF',
+    action: FlowAction.HANDOFF,
   },
   ACCESS_ISSUE: {
     id: 'ACCESS_ISSUE',
@@ -71,21 +73,21 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     id: 'BOLETO_ACTION',
     message:
       'Enviamos a 2ª via do boleto para o seu e-mail cadastrado. Verifique sua caixa de entrada (e spam).',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   PAYMENT_STATUS: {
     id: 'PAYMENT_STATUS',
     message: 'Seu último pagamento foi processado com sucesso em 10/02/2026.',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   FEEDBACK_POSITIVE: {
     id: 'FEEDBACK_POSITIVE',
     message: 'Ótimo! Fico feliz em ter ajudado. Até a próxima! 👋',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   CLOSE_CONVERSATION: {
     id: 'CLOSE_CONVERSATION',
     message: 'Obrigado pelo contato. Tenha um ótimo dia! 👋',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
 };

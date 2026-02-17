@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
 import { FlowLog } from './entities/flow-log.entity';
 import { FUNNEL_TREE } from './funnel.config';
+import { FlowAction } from './enums/flow-action.enum';
 
 @Injectable()
 export class ChatbotService implements OnModuleInit {
@@ -94,7 +95,7 @@ export class ChatbotService implements OnModuleInit {
     // 2. Validate Input against Current Node Options
     const cleanInput = body.trim();
     let nextNodeId: string | null = null;
-    let actionType = 'USER_MESSAGE';
+    let actionType = FlowAction.USER_MESSAGE;
 
     if (currentNode.options && currentNode.options[cleanInput]) {
       nextNodeId = currentNode.options[cleanInput];
@@ -108,7 +109,14 @@ export class ChatbotService implements OnModuleInit {
       // If staying on same node, it's an invalid input
       if (fallbackId === initialStep) {
         // Log the "invalid input" event but don't change state
-        await this.logFlow(sessionId, phone, initialStep, initialStep, 'INVALID_INPUT', body);
+        await this.logFlow(
+          sessionId,
+          phone,
+          initialStep,
+          initialStep,
+          FlowAction.INVALID_INPUT,
+          body,
+        );
         return `Opção inválida. \n\n${currentNode.message}`;
       }
 
@@ -125,16 +133,16 @@ export class ChatbotService implements OnModuleInit {
 
     // 4. Handle Actions (HANDOFF, CLOSE)
     let finalStep = nextNodeId;
-    if (nextNode.action === 'HANDOFF') {
+    if (nextNode.action === FlowAction.HANDOFF) {
       this.logger.log(`Performing HANDOFF for ${phone}`);
       finalStep = 'HANDOFF_ACTIVE'; // Special state to block bot
-      actionType = 'HANDOFF';
-    } else if (nextNode.action === 'CLOSE') {
+      actionType = FlowAction.HANDOFF;
+    } else if (nextNode.action === FlowAction.CLOSE) {
       // Logic to close ticket?
       // Reset to START for next interaction?
       // Usually we want to keep it "closed" until they talk again, effectively restarting.
       finalStep = 'START';
-      actionType = 'CLOSE';
+      actionType = FlowAction.CLOSE;
     }
 
     // 5. Update User State
@@ -154,7 +162,7 @@ export class ChatbotService implements OnModuleInit {
     userPhone: string,
     previousStep: string,
     newStep: string,
-    action: string,
+    action: FlowAction,
     inputContent: string,
   ) {
     try {
