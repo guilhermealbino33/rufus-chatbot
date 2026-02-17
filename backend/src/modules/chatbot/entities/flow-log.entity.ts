@@ -1,12 +1,14 @@
-import { Entity, Column } from 'typeorm';
+import { Entity, Column, Index } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
 import { FlowAction } from '../enums/flow-action.enum';
 
 @Entity('flow_logs')
 export class FlowLog extends BaseEntity {
+  @Index()
   @Column()
   sessionId: string;
 
+  @Index()
   @Column()
   userPhone: string;
 
@@ -16,6 +18,7 @@ export class FlowLog extends BaseEntity {
   @Column({ name: 'new_step' })
   newStep: string;
 
+  @Index()
   @Column({
     type: 'enum',
     enum: FlowAction,

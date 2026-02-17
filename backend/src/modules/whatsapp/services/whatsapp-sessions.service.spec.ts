@@ -42,6 +42,7 @@ const makeSut = (): MakeSutTypes => {
     createClient: jest.fn(),
     removeClient: jest.fn(),
     getConnectionState: jest.fn(),
+    isClientInitializing: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientManager>;
 
   const sut = new WhatsappSessionsService(sessionRepository, clientManager as any, webhookService);
