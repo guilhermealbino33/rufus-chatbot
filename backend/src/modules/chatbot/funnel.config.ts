@@ -1,3 +1,5 @@
+import { ChatbotState, FlowAction } from './enums';
+
 export interface FunnelStep {
   id: string;
   message: string;
@@ -5,12 +7,12 @@ export interface FunnelStep {
   mediaUrl?: string;
   options?: Record<string, string>; // User Input -> Next Step ID
   fallbackNodeId?: string;
-  action?: 'HANDOFF' | 'CLOSE';
+  action?: FlowAction;
 }
 
 export const FUNNEL_TREE: Record<string, FunnelStep> = {
-  START: {
-    id: 'START',
+  [ChatbotState.START]: {
+    id: ChatbotState.START,
     message:
       'Olá! Bem-vindo ao Suporte da Rufus. Como podemos ajudar hoje?\n\n1. Financeiro 💰\n2. Suporte Técnico 🛠️\n3. Fale com um atendente 👩‍💼',
     options: {
@@ -18,7 +20,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
       '2': 'SUPORTE_MENU',
       '3': 'HUMAN_HANDOFF',
     },
-    fallbackNodeId: 'START',
+    fallbackNodeId: ChatbotState.START,
   },
   FINANCEIRO_MENU: {
     id: 'FINANCEIRO_MENU',
@@ -27,7 +29,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     options: {
       '1': 'BOLETO_ACTION',
       '2': 'PAYMENT_STATUS',
-      '3': 'START',
+      '3': ChatbotState.START,
     },
     fallbackNodeId: 'FINANCEIRO_MENU',
   },
@@ -38,7 +40,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     options: {
       '1': 'ACCESS_ISSUE',
       '2': 'SYSTEM_FAQ',
-      '3': 'START',
+      '3': ChatbotState.START,
     },
     fallbackNodeId: 'SUPORTE_MENU',
   },
@@ -46,7 +48,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     id: 'HUMAN_HANDOFF',
     message:
       'Entendido. Estou transferindo seu atendimento para um de nossos especialistas. Por favor, aguarde um momento...',
-    action: 'HANDOFF',
+    action: FlowAction.HANDOFF,
   },
   ACCESS_ISSUE: {
     id: 'ACCESS_ISSUE',
@@ -63,7 +65,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     message:
       'Você pode consultar nosso FAQ completo em: https://ajuda.rufus.com.br\n\nDeseja voltar ao menu?\n1. Sim\n2. Encerrar atendimento',
     options: {
-      '1': 'START',
+      '1': ChatbotState.START,
       '2': 'CLOSE_CONVERSATION',
     },
   },
@@ -71,21 +73,21 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     id: 'BOLETO_ACTION',
     message:
       'Enviamos a 2ª via do boleto para o seu e-mail cadastrado. Verifique sua caixa de entrada (e spam).',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   PAYMENT_STATUS: {
     id: 'PAYMENT_STATUS',
     message: 'Seu último pagamento foi processado com sucesso em 10/02/2026.',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   FEEDBACK_POSITIVE: {
     id: 'FEEDBACK_POSITIVE',
     message: 'Ótimo! Fico feliz em ter ajudado. Até a próxima! 👋',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
   CLOSE_CONVERSATION: {
     id: 'CLOSE_CONVERSATION',
     message: 'Obrigado pelo contato. Tenha um ótimo dia! 👋',
-    action: 'CLOSE',
+    action: FlowAction.CLOSE,
   },
 };
