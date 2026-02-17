@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatbotUser } from './entities/chatbot-user.entity';
+import { ChatbotState } from './enums/chatbot-state.enum';
 
 @Injectable()
 export class ChatbotUserService {
@@ -24,7 +25,7 @@ export class ChatbotUserService {
       user = this.chatbotUserRepository.create({
         phoneNumber,
         name,
-        currentStep: 'START',
+        currentStep: ChatbotState.START,
         contextData: {},
       });
       await this.chatbotUserRepository.save(user);

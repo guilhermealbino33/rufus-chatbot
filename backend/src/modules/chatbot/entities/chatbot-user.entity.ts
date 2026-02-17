@@ -1,5 +1,6 @@
 import { Entity, Column, Index } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
+import { ChatbotState } from '../enums';
 
 @Entity('chatbot_users')
 export class ChatbotUser extends BaseEntity {
@@ -10,7 +11,8 @@ export class ChatbotUser extends BaseEntity {
   @Column({ nullable: true })
   name: string;
 
-  @Column({ default: 'START' })
+  @Index()
+  @Column({ default: ChatbotState.START })
   currentStep: string;
 
   @Column('jsonb', { default: {} })

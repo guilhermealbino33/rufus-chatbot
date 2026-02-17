@@ -1,4 +1,4 @@
-import { FlowAction } from './enums/flow-action.enum';
+import { ChatbotState, FlowAction } from './enums';
 
 export interface FunnelStep {
   id: string;
@@ -11,8 +11,8 @@ export interface FunnelStep {
 }
 
 export const FUNNEL_TREE: Record<string, FunnelStep> = {
-  START: {
-    id: 'START',
+  [ChatbotState.START]: {
+    id: ChatbotState.START,
     message:
       'Olá! Bem-vindo ao Suporte da Rufus. Como podemos ajudar hoje?\n\n1. Financeiro 💰\n2. Suporte Técnico 🛠️\n3. Fale com um atendente 👩‍💼',
     options: {
@@ -20,7 +20,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
       '2': 'SUPORTE_MENU',
       '3': 'HUMAN_HANDOFF',
     },
-    fallbackNodeId: 'START',
+    fallbackNodeId: ChatbotState.START,
   },
   FINANCEIRO_MENU: {
     id: 'FINANCEIRO_MENU',
@@ -29,7 +29,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     options: {
       '1': 'BOLETO_ACTION',
       '2': 'PAYMENT_STATUS',
-      '3': 'START',
+      '3': ChatbotState.START,
     },
     fallbackNodeId: 'FINANCEIRO_MENU',
   },
@@ -40,7 +40,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     options: {
       '1': 'ACCESS_ISSUE',
       '2': 'SYSTEM_FAQ',
-      '3': 'START',
+      '3': ChatbotState.START,
     },
     fallbackNodeId: 'SUPORTE_MENU',
   },
@@ -65,7 +65,7 @@ export const FUNNEL_TREE: Record<string, FunnelStep> = {
     message:
       'Você pode consultar nosso FAQ completo em: https://ajuda.rufus.com.br\n\nDeseja voltar ao menu?\n1. Sim\n2. Encerrar atendimento',
     options: {
-      '1': 'START',
+      '1': ChatbotState.START,
       '2': 'CLOSE_CONVERSATION',
     },
   },
