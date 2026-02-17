@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
 import { FlowLog } from './entities/flow-log.entity';
 import { FUNNEL_TREE } from './funnel.config';
-import { FlowAction } from './enums/flow-action.enum';
+import { ChatbotState, FlowAction } from './enums';
 
 @Injectable()
 export class ChatbotService implements OnModuleInit {
@@ -76,10 +76,10 @@ export class ChatbotService implements OnModuleInit {
     // Check if user is in HANDOFF state
     // TODO: Implement a timeout or manual reset for HANDOFF. For now, if in HANDOFF, we stop.
     // If you want to allow "reset", check for a keyword like #RESET
-    if (initialStep === 'HANDOFF_ACTIVE') {
+    if (initialStep === ChatbotState.HANDOFF_ACTIVE) {
       if (body.trim().toUpperCase() === '#VOLTAR') {
-        await this.chatbotUserService.updateState(user.id, 'START');
-        return FUNNEL_TREE.START.message;
+        await this.chatbotUserService.updateState(user.id, ChatbotState.START);
+        return FUNNEL_TREE[ChatbotState.START].message;
       }
       return null; // Silently ignore to let human agent handle
     }
@@ -88,8 +88,8 @@ export class ChatbotService implements OnModuleInit {
 
     if (!currentNode) {
       this.logger.error(`Node ${initialStep} not found in FUNNEL_TREE. Resetting to START.`);
-      await this.chatbotUserService.updateState(user.id, 'START');
-      return FUNNEL_TREE.START.message;
+      await this.chatbotUserService.updateState(user.id, ChatbotState.START);
+      return FUNNEL_TREE[ChatbotState.START].message;
     }
 
     // 2. Validate Input against Current Node Options
@@ -135,13 +135,13 @@ export class ChatbotService implements OnModuleInit {
     let finalStep = nextNodeId;
     if (nextNode.action === FlowAction.HANDOFF) {
       this.logger.log(`Performing HANDOFF for ${phone}`);
-      finalStep = 'HANDOFF_ACTIVE'; // Special state to block bot
+      finalStep = ChatbotState.HANDOFF_ACTIVE; // Special state to block bot
       actionType = FlowAction.HANDOFF;
     } else if (nextNode.action === FlowAction.CLOSE) {
       // Logic to close ticket?
       // Reset to START for next interaction?
       // Usually we want to keep it "closed" until they talk again, effectively restarting.
-      finalStep = 'START';
+      finalStep = ChatbotState.START;
       actionType = FlowAction.CLOSE;
     }
 
