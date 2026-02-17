@@ -64,8 +64,14 @@ export class WhatsappMessagesService implements OnModuleInit {
       // Import JID utilities inline to avoid circular dependencies
       const { normalizeJid, isLidJid } = await import('../utils/jid.utils');
 
+      // Multi-line replacement to handle try-catch around normalizeJid
       // Normalize the JID - this preserves @lid and @c.us formats, or converts pure numbers
-      const normalizedJid = normalizeJid(phone);
+      let normalizedJid: string;
+      try {
+        normalizedJid = normalizeJid(phone);
+      } catch (error) {
+        throw new BadRequestException(`Invalid phone number format: ${phone}`);
+      }
 
       this.logger.debug(`[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`);
 

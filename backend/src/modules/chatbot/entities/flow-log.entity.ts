@@ -1,20 +1,34 @@
-import { Entity, Column } from 'typeorm';
+import { Entity, Column, Index } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
+import { FlowAction } from '../enums/flow-action.enum';
 
 @Entity('flow_logs')
 export class FlowLog extends BaseEntity {
-    @Column()
-    phone: string;
+  @Index()
+  @Column()
+  sessionId: string;
 
-    @Column({ name: 'from_state' })
-    fromState: string;
+  @Index()
+  @Column()
+  userPhone: string;
 
-    @Column({ name: 'to_state' })
-    toState: string;
+  @Column({ name: 'previous_step' })
+  previousStep: string;
 
-    @Column({ name: 'user_input' })
-    userInput: string;
+  @Column({ name: 'new_step' })
+  newStep: string;
 
-    @Column('jsonb', { nullable: true })
-    metadata: Record<string, any>;
+  @Index()
+  @Column({
+    type: 'enum',
+    enum: FlowAction,
+    default: FlowAction.USER_MESSAGE,
+  })
+  action: FlowAction;
+
+  @Column({ name: 'input_content', type: 'text', nullable: true })
+  inputContent: string;
+
+  @Column('jsonb', { nullable: true })
+  metadata: Record<string, any>;
 }
