@@ -12,7 +12,8 @@ interface MakeSutTypes {
 }
 
 const makeSut = (): MakeSutTypes => {
-  const sut = new WhatsappClientFactory();
+  const configService = { get: jest.fn(() => undefined) } as any;
+  const sut = new WhatsappClientFactory(configService);
 
   (sut as any).logger = {
     log: jest.fn(),

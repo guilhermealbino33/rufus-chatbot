@@ -1,7 +1,9 @@
 import { Module, Global } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { CrosscuttingConfigModule } from './crosscutting/config';
+import { AuthModule } from './modules/auth';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -11,20 +13,22 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
 @Global()
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    CrosscuttingConfigModule,
     EventEmitterModule.forRoot(),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DATABASE_HOST,
-      port: parseInt(process.env.DATABASE_PORT, 10) || 5432,
-      username: process.env.DATABASE_USERNAME,
-      password: process.env.DATABASE_PASSWORD,
-      database: process.env.DATABASE_NAME,
-      autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production', // Apenas para dev, em prod usar migrations
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get<string>('database.host'),
+        port: config.get<number>('database.port'),
+        username: config.get<string>('database.username'),
+        password: config.get<string>('database.password'),
+        database: config.get<string>('database.name'),
+        autoLoadEntities: true,
+        synchronize: config.get<string>('nodeEnv') !== 'production', // Apenas para dev, em prod usar migrations
+      }),
     }),
+    AuthModule,
     ChatbotModule,
     UsersModule,
     WhatsappModule,

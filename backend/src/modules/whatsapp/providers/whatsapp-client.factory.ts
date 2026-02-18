@@ -1,4 +1,5 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientConfig, DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
 import { BrowserAlreadyRunningException } from '../exceptions/browser-already-running.exception';
@@ -15,6 +16,8 @@ import { BrowserAlreadyRunningException } from '../exceptions/browser-already-ru
 @Injectable()
 export class WhatsappClientFactory {
   private readonly logger = new Logger(WhatsappClientFactory.name);
+
+  constructor(private readonly configService: ConfigService) {}
 
   /**
    * Cria uma nova instância do cliente WPPConnect
@@ -57,6 +60,9 @@ export class WhatsappClientFactory {
    * @returns Objeto de opções no formato do WPPConnect
    */
   private buildWppConnectOptions(config: WhatsappClientConfig): wppconnect.CreateOptions {
+    const executablePath =
+      config.executablePath ?? this.configService.get<string>('chromiumExecutablePath');
+
     const options: wppconnect.CreateOptions = {
       session: config.sessionName,
       headless: config.headless ?? DEFAULT_WHATSAPP_CONFIG.headless,
@@ -66,6 +72,9 @@ export class WhatsappClientFactory {
       autoClose: config.autoClose ?? DEFAULT_WHATSAPP_CONFIG.autoClose,
       browserArgs: config.browserArgs ?? DEFAULT_WHATSAPP_CONFIG.browserArgs,
       devtools: false,
+      ...(executablePath && {
+        puppeteerOptions: { executablePath },
+      }),
     };
 
     // Adicionar callbacks opcionais apenas se fornecidos
