@@ -99,6 +99,12 @@ O Rufus vai além de uma simples integração, oferecendo controle total do cicl
 
 ---
 
+## 🚂 Deploy (Railway)
+
+Para publicar o backend no Railway com Docker (recomendado para WPPConnect/Chromium), use o guia em [**backend/docs/RAILWAY_DEPLOY.md**](backend/docs/RAILWAY_DEPLOY.md): instalação da CLI, variáveis de ambiente e primeiro deploy.
+
+---
+
 ## 📋 Roadmap
 
 - [ ] **Interface Web**: Dashboard completo para gestão de sessões e histórico.
@@ -117,5 +123,5 @@ Este projeto está sob a licença [MIT](file:///home/guilherme/Documentos/dev/ru
 <p align="center">
   Desenvolvido com ❤️ pela equipe Rufus.
   <br>
-  <i>Última atualização: 10 de fevereiro de 2026</i>
+  <i>Última atualização: 18 de fevereiro de 2026</i>
 </p>
