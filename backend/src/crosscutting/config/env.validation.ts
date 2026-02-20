@@ -76,6 +76,16 @@ function cleanEnvString(value: string | undefined): string | undefined {
  * Lança exceção com mensagens de erro se a validação falhar.
  */
 export function validateEnv(): EnvironmentVariables {
+  // Log temporário para debug: verificar o que está vindo do Railway
+  console.log('[EnvDebug] Raw process.env:', {
+    DATABASE_HOST: process.env.DATABASE_HOST,
+    DATABASE_PORT: process.env.DATABASE_PORT,
+    DATABASE_USERNAME: process.env.DATABASE_USERNAME,
+    DATABASE_NAME: process.env.DATABASE_NAME,
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+  });
+
   const portRaw = cleanEnvString(process.env.PORT);
   const dbPortRaw = cleanEnvString(process.env.DATABASE_PORT);
 
