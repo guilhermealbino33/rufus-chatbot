@@ -75,17 +75,42 @@ function cleanEnvString(value: string | undefined): string | undefined {
 }
 
 /**
- * Resolve variáveis de banco de dados aceitando tanto os nomes
- * internos (DATABASE_*) quanto os nomes padrão Railway (PG*).
- * Prioridade: DATABASE_* > PG* > default.
+ * Extrai componentes de uma DATABASE_URL completa.
+ * Formato: postgresql://user:password@host:port/database
+ * Railway injeta esta variável automaticamente via Service Link.
+ */
+function parseDatabaseUrl(url: string | undefined): Partial<Record<string, string>> {
+  if (!url) return {};
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || '5432',
+      username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+      password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+      name: parsed.pathname.replace(/^\//, ''),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Resolve variáveis de banco de dados com fallback encadeado:
+ * DATABASE_* > PG* > DATABASE_URL (connection string) > defaults
  */
 function resolveDbVars(env: NodeJS.ProcessEnv) {
+  const fromUrl = parseDatabaseUrl(env.DATABASE_URL);
+
   return {
-    DATABASE_HOST: cleanEnvString(env.DATABASE_HOST ?? env.PGHOST) ?? 'localhost',
-    DATABASE_PORT: cleanEnvString(env.DATABASE_PORT ?? env.PGPORT) ?? '5432',
-    DATABASE_USERNAME: cleanEnvString(env.DATABASE_USERNAME ?? env.PGUSER) ?? 'postgres',
-    DATABASE_PASSWORD: cleanEnvString(env.DATABASE_PASSWORD ?? env.PGPASSWORD) ?? 'postgres',
-    DATABASE_NAME: cleanEnvString(env.DATABASE_NAME ?? env.PGDATABASE) ?? 'rufus_chatbot',
+    DATABASE_HOST: cleanEnvString(env.DATABASE_HOST ?? env.PGHOST ?? fromUrl.host) ?? 'localhost',
+    DATABASE_PORT: cleanEnvString(env.DATABASE_PORT ?? env.PGPORT ?? fromUrl.port) ?? '5432',
+    DATABASE_USERNAME:
+      cleanEnvString(env.DATABASE_USERNAME ?? env.PGUSER ?? fromUrl.username) ?? 'postgres',
+    DATABASE_PASSWORD:
+      cleanEnvString(env.DATABASE_PASSWORD ?? env.PGPASSWORD ?? fromUrl.password) ?? 'postgres',
+    DATABASE_NAME:
+      cleanEnvString(env.DATABASE_NAME ?? env.PGDATABASE ?? fromUrl.name) ?? 'rufus_chatbot',
   };
 }
 
@@ -100,33 +125,41 @@ export function validateEnv(env: Record<string, unknown>): EnvironmentVariables 
 
   const db = resolveDbVars(env as NodeJS.ProcessEnv);
 
-  // Log de debug: mostra as variáveis resolvidas no boot
+  // Log de debug: mostra as variáveis resolvidas e fontes disponíveis no boot
   console.log('[EnvDebug] Resolved database vars:', {
     DATABASE_HOST: db.DATABASE_HOST,
     DATABASE_PORT: db.DATABASE_PORT,
     DATABASE_USERNAME: db.DATABASE_USERNAME,
     DATABASE_NAME: db.DATABASE_NAME,
     NODE_ENV: nodeEnv,
+    // Fontes disponíveis (para diagnóstico de Railway)
+    HAS_DATABASE_HOST: !!(env as NodeJS.ProcessEnv).DATABASE_HOST,
+    HAS_PGHOST: !!(env as NodeJS.ProcessEnv).PGHOST,
+    HAS_DATABASE_URL: !!(env as NodeJS.ProcessEnv).DATABASE_URL,
   });
 
-  // Em produção: verifica se as variáveis essenciais foram resolvidas
+  // Em produção: verifica se as variáveis essenciais foram resolvidas (não são os defaults)
   if (isProduction) {
     const missingVars: string[] = [];
     if (!db.DATABASE_HOST || db.DATABASE_HOST === 'localhost')
-      missingVars.push('DATABASE_HOST (ou PGHOST)');
+      missingVars.push('DATABASE_HOST / PGHOST');
     if (!db.DATABASE_USERNAME || db.DATABASE_USERNAME === 'postgres')
-      missingVars.push('DATABASE_USERNAME (ou PGUSER)');
+      missingVars.push('DATABASE_USERNAME / PGUSER');
     if (!db.DATABASE_PASSWORD || db.DATABASE_PASSWORD === 'postgres')
-      missingVars.push('DATABASE_PASSWORD (ou PGPASSWORD)');
+      missingVars.push('DATABASE_PASSWORD / PGPASSWORD');
     if (!db.DATABASE_NAME || db.DATABASE_NAME === 'rufus_chatbot')
-      missingVars.push('DATABASE_NAME (ou PGDATABASE)');
+      missingVars.push('DATABASE_NAME / PGDATABASE');
 
     if (missingVars.length > 0) {
       throw new Error(
-        `❌ Variáveis de ambiente obrigatórias não encontradas em produção:\n` +
-          `   ${missingVars.join(', ')}\n\n` +
-          `   Configure via Railway Variables (DATABASE_*) ou Service Link (PGHOST, PGUSER, etc.).\n` +
-          `   Consulte: https://docs.railway.app/guides/variables`,
+        `❌ Variáveis de banco de dados não encontradas em produção:\n` +
+          `   Faltando: ${missingVars.join(', ')}\n\n` +
+          `   Soluções Railway (escolha uma):\n` +
+          `   1. Service Link: conecte o serviço PostgreSQL à API no dashboard\n` +
+          `      (injeta DATABASE_URL, PGHOST, PGUSER, etc. automaticamente)\n` +
+          `   2. Reference Variables: adicione DATABASE_HOST=\${{PostgreSQL.PGHOST}} etc.\n` +
+          `   3. Manual: defina DATABASE_URL=postgresql://user:pass@host:port/db\n` +
+          `   Docs: https://docs.railway.app/guides/variables`,
       );
     }
   }
