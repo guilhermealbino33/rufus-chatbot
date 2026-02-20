@@ -32,6 +32,9 @@ export interface WhatsappClientConfig {
   /** Telefone para pareamento (apenas se pairingMode for 'phone') */
   phoneNumber?: string;
 
+  /** Caminho para o executável do Chromium/Chrome (ex.: em Docker/Railway) */
+  executablePath?: string;
+
   // ========== Callbacks de Eventos ==========
 
   /** Callback executado quando um QR Code é gerado */

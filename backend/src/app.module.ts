@@ -1,36 +1,64 @@
-import { Module, Global } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { Module, Logger } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import {
+  authConfig,
+  CrosscuttingConfigModule,
+  databaseConfig,
+  serverConfig,
+  whatsappConfig,
+} from './crosscutting/config';
+import { AuthModule } from './modules/auth';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
 import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
+import { SharedModule } from './shared/shared.module';
 
-@Global()
 @Module({
   imports: [
+    CrosscuttingConfigModule,
+    EventEmitterModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
+      load: [databaseConfig, authConfig, serverConfig, whatsappConfig],
     }),
-    EventEmitterModule.forRoot(),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DATABASE_HOST,
-      port: parseInt(process.env.DATABASE_PORT, 10) || 5432,
-      username: process.env.DATABASE_USERNAME,
-      password: process.env.DATABASE_PASSWORD,
-      database: process.env.DATABASE_NAME,
-      autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production', // Apenas para dev, em prod usar migrations
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const dbHost = config.get<string>('database.host');
+        const dbPort = config.get<number>('database.port');
+        const dbName = config.get<string>('database.name');
+        const nodeEnv = config.get<string>('nodeEnv');
+
+        // Logando as variáveis de ambiente
+        Logger.log(`Environment Variables:`, 'DatabaseConfig');
+        Logger.log(`DATABASE_HOST: ${dbHost}`, 'DatabaseConfig');
+        Logger.log(`DATABASE_PORT: ${dbPort}`, 'DatabaseConfig');
+        Logger.log(`DATABASE_NAME: ${dbName}`, 'DatabaseConfig');
+        Logger.log(`NODE_ENV: ${nodeEnv}`, 'DatabaseConfig');
+
+        return {
+          type: 'postgres',
+          host: dbHost,
+          port: dbPort,
+          username: config.get<string>('database.username'),
+          password: config.get<string>('database.password'),
+          database: dbName,
+          autoLoadEntities: true,
+        };
+      },
     }),
+    AuthModule,
     ChatbotModule,
     UsersModule,
     WhatsappModule,
+    SharedModule,
   ],
   controllers: [],
   providers: [WebhookService, ExistsConstraint],
-  exports: [WebhookService],
 })
 export class AppModule {}
