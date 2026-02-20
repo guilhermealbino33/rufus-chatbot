@@ -1,17 +1,19 @@
 import { Module, Global } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
-import { configuration } from './configuration';
+import { validateEnv } from './env.validation';
+import { databaseConfig, serverConfig, authConfig, whatsappConfig } from './namespaces';
 
 @Global()
 @Module({
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
-      // Em produção (Railway), não há arquivo .env, então ignora e usa apenas process.env
+      // Em produção (Railway), não há arquivo .env — usa apenas process.env
       ignoreEnvFile: process.env.NODE_ENV === 'production',
-      // Garante que sempre leia de process.env (padrão do NestJS, mas explícito)
-      expandVariables: true,
-      load: [configuration],
+      // Valida variáveis no boot; lança exceção se inválidas
+      validate: validateEnv,
+      // Carrega os namespaces tipados por domínio
+      load: [databaseConfig, serverConfig, authConfig, whatsappConfig],
     }),
   ],
   exports: [NestConfigModule],
