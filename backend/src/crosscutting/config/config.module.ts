@@ -7,9 +7,7 @@ import { databaseConfig, serverConfig, authConfig, whatsappConfig } from './name
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
-      // Em produção (Railway), não há arquivo .env — usa apenas process.env
       ignoreEnvFile: process.env.NODE_ENV === 'production',
-      // Carrega os namespaces tipados por domínio
       load: [databaseConfig, serverConfig, authConfig, whatsappConfig],
     }),
   ],
