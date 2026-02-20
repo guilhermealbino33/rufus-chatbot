@@ -1,8 +1,14 @@
-import { Module, Global, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Module, Logger } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { CrosscuttingConfigModule } from './crosscutting/config';
+import {
+  authConfig,
+  CrosscuttingConfigModule,
+  databaseConfig,
+  serverConfig,
+  whatsappConfig,
+} from './crosscutting/config';
 import { AuthModule } from './modules/auth';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { UsersModule } from './modules/users/users.module';
@@ -10,11 +16,15 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
 import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
 
-@Global()
 @Module({
   imports: [
     CrosscuttingConfigModule,
     EventEmitterModule.forRoot(),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      load: [databaseConfig, authConfig, serverConfig, whatsappConfig],
+    }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -23,10 +33,12 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
         const dbName = config.get<string>('database.name');
         const nodeEnv = config.get<string>('nodeEnv');
 
-        Logger.log(
-          `TypeORM config → host=${dbHost}, port=${dbPort}, db=${dbName}, nodeEnv=${nodeEnv}`,
-          'DatabaseConfig',
-        );
+        // Logando as variáveis de ambiente
+        Logger.log(`Environment Variables:`, 'DatabaseConfig');
+        Logger.log(`DATABASE_HOST: ${dbHost}`, 'DatabaseConfig');
+        Logger.log(`DATABASE_PORT: ${dbPort}`, 'DatabaseConfig');
+        Logger.log(`DATABASE_NAME: ${dbName}`, 'DatabaseConfig');
+        Logger.log(`NODE_ENV: ${nodeEnv}`, 'DatabaseConfig');
 
         return {
           type: 'postgres',
@@ -36,9 +48,8 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
           password: config.get<string>('database.password'),
           database: dbName,
           autoLoadEntities: true,
-          synchronize: nodeEnv !== 'production',
         };
-      },
+      }, // <-- Chave de fechamento do useFactory que estava faltando
     }),
     AuthModule,
     ChatbotModule,
@@ -47,6 +58,5 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
   ],
   controllers: [],
   providers: [WebhookService, ExistsConstraint],
-  exports: [WebhookService],
 })
 export class AppModule {}
