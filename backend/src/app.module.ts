@@ -1,4 +1,4 @@
-import { Module, Global } from '@nestjs/common';
+import { Module, Global, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -17,16 +17,28 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
     EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('database.host'),
-        port: config.get<number>('database.port'),
-        username: config.get<string>('database.username'),
-        password: config.get<string>('database.password'),
-        database: config.get<string>('database.name'),
-        autoLoadEntities: true,
-        synchronize: config.get<string>('nodeEnv') !== 'production', // Apenas para dev, em prod usar migrations
-      }),
+      useFactory: (config: ConfigService) => {
+        const dbHost = config.get<string>('database.host');
+        const dbPort = config.get<number>('database.port');
+        const dbName = config.get<string>('database.name');
+        const nodeEnv = config.get<string>('nodeEnv');
+
+        Logger.log(
+          `TypeORM config → host=${dbHost}, port=${dbPort}, db=${dbName}, nodeEnv=${nodeEnv}`,
+          'DatabaseConfig',
+        );
+
+        return {
+          type: 'postgres',
+          host: dbHost,
+          port: dbPort,
+          username: config.get<string>('database.username'),
+          password: config.get<string>('database.password'),
+          database: dbName,
+          autoLoadEntities: true,
+          synchronize: nodeEnv !== 'production',
+        };
+      },
     }),
     AuthModule,
     ChatbotModule,
