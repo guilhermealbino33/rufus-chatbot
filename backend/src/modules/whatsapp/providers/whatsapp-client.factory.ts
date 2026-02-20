@@ -1,8 +1,9 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientConfig, DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
 import { BrowserAlreadyRunningException } from '../exceptions/browser-already-running.exception';
+import { whatsappConfig } from '@/crosscutting/config';
 
 /**
  * Factory responsável pela criação de instâncias do WPPConnect
@@ -17,7 +18,10 @@ import { BrowserAlreadyRunningException } from '../exceptions/browser-already-ru
 export class WhatsappClientFactory {
   private readonly logger = new Logger(WhatsappClientFactory.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    @Inject(whatsappConfig.KEY)
+    private readonly whatsappCfg: ConfigType<typeof whatsappConfig>,
+  ) {}
 
   /**
    * Cria uma nova instância do cliente WPPConnect
@@ -60,8 +64,7 @@ export class WhatsappClientFactory {
    * @returns Objeto de opções no formato do WPPConnect
    */
   private buildWppConnectOptions(config: WhatsappClientConfig): wppconnect.CreateOptions {
-    const executablePath =
-      config.executablePath ?? this.configService.get<string>('chromiumExecutablePath');
+    const executablePath = config.executablePath ?? this.whatsappCfg.chromiumExecutablePath;
 
     const options: wppconnect.CreateOptions = {
       session: config.sessionName,

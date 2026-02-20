@@ -1,16 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigType } from '@nestjs/config';
 import { useContainer } from 'class-validator';
 import { AppModule } from './app.module';
+import { serverConfig } from './crosscutting/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const configService = app.get(ConfigService);
-  const corsOrigin = configService.get<string | string[] | boolean>('corsOrigin');
+  const srv = app.get<ConfigType<typeof serverConfig>>(serverConfig.KEY);
+
   app.enableCors(
-    corsOrigin === true || corsOrigin === undefined ? { origin: true } : { origin: corsOrigin },
+    srv.corsOrigin === true || srv.corsOrigin === undefined
+      ? { origin: true }
+      : { origin: srv.corsOrigin },
   );
 
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
@@ -27,8 +30,7 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('port') ?? 3000;
-  await app.listen(port);
+  await app.listen(srv.port);
 }
 
 bootstrap();
