@@ -15,6 +15,7 @@ import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
 import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
+import { SharedModule } from './shared/shared.module';
 
 @Module({
   imports: [
@@ -49,12 +50,13 @@ import { ExistsConstraint } from './shared/common/decorators/exists-constraint.d
           database: dbName,
           autoLoadEntities: true,
         };
-      }, // <-- Chave de fechamento do useFactory que estava faltando
+      },
     }),
     AuthModule,
     ChatbotModule,
     UsersModule,
     WhatsappModule,
+    SharedModule,
   ],
   controllers: [],
   providers: [WebhookService, ExistsConstraint],
