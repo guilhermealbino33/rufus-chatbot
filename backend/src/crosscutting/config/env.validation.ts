@@ -76,6 +76,9 @@ function cleanEnvString(value: string | undefined): string | undefined {
  * Lança exceção com mensagens de erro se a validação falhar.
  */
 export function validateEnv(): EnvironmentVariables {
+  const nodeEnv = cleanEnvString(process.env.NODE_ENV) ?? 'development';
+  const isProduction = nodeEnv === 'production';
+
   // Log temporário para debug: verificar o que está vindo do Railway
   console.log('[EnvDebug] Raw process.env:', {
     DATABASE_HOST: process.env.DATABASE_HOST,
@@ -86,12 +89,44 @@ export function validateEnv(): EnvironmentVariables {
     PORT: process.env.PORT,
   });
 
+  // Log de TODAS as variáveis que começam com DATABASE_ para debug
+  const allDatabaseVars = Object.keys(process.env)
+    .filter((key) => key.startsWith('DATABASE_'))
+    .reduce(
+      (acc, key) => {
+        acc[key] = process.env[key];
+        return acc;
+      },
+      {} as Record<string, string | undefined>,
+    );
+  console.log('[EnvDebug] All DATABASE_* vars:', allDatabaseVars);
+
+  // Validação explícita: em produção, variáveis obrigatórias devem estar definidas
+  const missingVars: string[] = [];
+
+  if (isProduction) {
+    if (!process.env.DATABASE_HOST) missingVars.push('DATABASE_HOST');
+    if (!process.env.DATABASE_PORT) missingVars.push('DATABASE_PORT');
+    if (!process.env.DATABASE_USERNAME) missingVars.push('DATABASE_USERNAME');
+    if (!process.env.DATABASE_PASSWORD) missingVars.push('DATABASE_PASSWORD');
+    if (!process.env.DATABASE_NAME) missingVars.push('DATABASE_NAME');
+  }
+
+  if (missingVars.length > 0) {
+    throw new Error(
+      `❌ Variáveis de ambiente obrigatórias não encontradas em produção:\n` +
+        `   ${missingVars.join(', ')}\n\n` +
+        `   Verifique se as variáveis estão configuradas no Railway (serviço rufus-chatbot-api → Variables).`,
+    );
+  }
+
   const portRaw = cleanEnvString(process.env.PORT);
   const dbPortRaw = cleanEnvString(process.env.DATABASE_PORT);
 
   const raw = {
-    NODE_ENV: cleanEnvString(process.env.NODE_ENV) ?? 'development',
+    NODE_ENV: nodeEnv,
     PORT: portRaw ? parseInt(portRaw, 10) : 3000,
+    // Em produção, usa valores obrigatórios; em dev, usa defaults
     DATABASE_HOST: cleanEnvString(process.env.DATABASE_HOST) ?? 'localhost',
     DATABASE_PORT: dbPortRaw ? parseInt(dbPortRaw, 10) : 5432,
     DATABASE_USERNAME: cleanEnvString(process.env.DATABASE_USERNAME) ?? 'postgres',
