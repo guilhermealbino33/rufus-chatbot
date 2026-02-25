@@ -49,6 +49,7 @@ import { SharedModule } from './shared/shared.module';
           password: config.get<string>('database.password'),
           database: dbName,
           autoLoadEntities: true,
+          synchronize: false,
         };
       },
     }),

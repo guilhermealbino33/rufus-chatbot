@@ -89,6 +89,12 @@ O Rufus vai além de uma simples integração, oferecendo controle total do cicl
    npm run backend:dev
    ```
 
+### 🗄️ Migrações de Banco de Dados
+
+Este projeto utiliza um sistema rigoroso de migrações para garantir a integridade dos dados em produção. O recurso `synchronize` do TypeORM está desativado.
+
+Para qualquer alteração no esquema do banco de dados, consulte o [**Guia de Migrações**](file:///home/guilherme/Documentos/dev/rufus-chatbot/backend/MIGRATIONS_WORKFLOW.md).
+
 ---
 
 ## 🧪 Testando a API
