@@ -1,6 +1,6 @@
 {
   "name": "rufus-chatbot-api",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "API para o Rufus Chatbot",
   "author": "Guilherme Albino",
   "private": true,
