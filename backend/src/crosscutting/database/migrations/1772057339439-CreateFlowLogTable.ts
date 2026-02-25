@@ -8,7 +8,18 @@ export class CreateFlowLogTable1772057339439 implements MigrationInterface {
       `CREATE TYPE "public"."flow_logs_action_enum" AS ENUM('USER_MESSAGE', 'HANDOFF', 'CLOSE', 'INVALID_INPUT', 'TIMEOUT', 'API_EVENT')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "flow_logs" ("id" SERIAL NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "sessionId" character varying NOT NULL, "userPhone" character varying NOT NULL, "previous_step" character varying NOT NULL, "new_step" character varying NOT NULL, "action" "public"."flow_logs_action_enum" NOT NULL DEFAULT 'USER_MESSAGE', "input_content" text, "metadata" jsonb, CONSTRAINT "PK_9a57c5a68424a13d4ead0e3211f" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "flow_logs" (
+        "id" SERIAL NOT NULL, 
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(), 
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now(), 
+        "sessionId" character varying NOT NULL, 
+        "userPhone" character varying NOT NULL, 
+        "previous_step" character varying NOT NULL, 
+        "new_step" character varying NOT NULL, 
+        "action" character varying NOT NULL DEFAULT 'USER_MESSAGE', 
+        "input_content" text, 
+        "metadata" jsonb, 
+        CONSTRAINT "PK_9a57c5a68424a13d4ead0e3211f" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE INDEX "IDX_d5a593e8ed7918f2320e184faf" ON "flow_logs" ("sessionId") `,
