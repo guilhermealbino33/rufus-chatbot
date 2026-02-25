@@ -16,6 +16,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
 import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
 import { SharedModule } from './shared/shared.module';
+import { AppDataSource } from './crosscutting/database/data-source';
 
 @Module({
   imports: [
@@ -26,32 +27,11 @@ import { SharedModule } from './shared/shared.module';
       envFilePath: '.env',
       load: [databaseConfig, authConfig, serverConfig, whatsappConfig],
     }),
-    TypeOrmModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const dbHost = config.get<string>('database.host');
-        const dbPort = config.get<number>('database.port');
-        const dbName = config.get<string>('database.name');
-        const nodeEnv = config.get<string>('nodeEnv');
-
-        // Logando as variáveis de ambiente
-        Logger.log(`Environment Variables:`, 'DatabaseConfig');
-        Logger.log(`DATABASE_HOST: ${dbHost}`, 'DatabaseConfig');
-        Logger.log(`DATABASE_PORT: ${dbPort}`, 'DatabaseConfig');
-        Logger.log(`DATABASE_NAME: ${dbName}`, 'DatabaseConfig');
-        Logger.log(`NODE_ENV: ${nodeEnv}`, 'DatabaseConfig');
-
-        return {
-          type: 'postgres',
-          host: dbHost,
-          port: dbPort,
-          username: config.get<string>('database.username'),
-          password: config.get<string>('database.password'),
-          database: dbName,
-          autoLoadEntities: true,
-        };
-      },
+    TypeOrmModule.forRoot({
+      ...AppDataSource.options,
+      autoLoadEntities: true,
     }),
+
     AuthModule,
     ChatbotModule,
     UsersModule,

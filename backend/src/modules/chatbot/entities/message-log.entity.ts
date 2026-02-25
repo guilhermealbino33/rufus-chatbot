@@ -2,22 +2,18 @@ import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../../shared/entities/base.entity';
 
 export enum Direction {
-    INBOUND = 'INBOUND',
-    OUTBOUND = 'OUTBOUND',
+  INBOUND = 'INBOUND',
+  OUTBOUND = 'OUTBOUND',
 }
 
 @Entity('message_logs')
 export class MessageLog extends BaseEntity {
-    @Column({ name: 'lead_id', nullable: true })
-    leadId: number;
+  @Column({ name: 'lead_id', nullable: true })
+  leadId: number;
 
-    @Column({
-        type: 'enum',
-        enum: Direction,
-    })
-    direction: Direction;
+  @Column()
+  direction: string;
 
-    @Column('text')
-    content: string;
+  @Column('text')
+  content: string;
 }
-

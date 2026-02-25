@@ -19,12 +19,8 @@ export class FlowLog extends BaseEntity {
   newStep: string;
 
   @Index()
-  @Column({
-    type: 'enum',
-    enum: FlowAction,
-    default: FlowAction.USER_MESSAGE,
-  })
-  action: FlowAction;
+  @Column({ default: FlowAction.USER_MESSAGE })
+  action: string;
 
   @Column({ name: 'input_content', type: 'text', nullable: true })
   inputContent: string;
