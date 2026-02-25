@@ -5,9 +5,6 @@ export class CreateFlowLogTable1772057339439 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TYPE "public"."flow_logs_action_enum" AS ENUM('USER_MESSAGE', 'HANDOFF', 'CLOSE', 'INVALID_INPUT', 'TIMEOUT', 'API_EVENT')`,
-    );
-    await queryRunner.query(
       `CREATE TABLE "flow_logs" (
         "id" SERIAL NOT NULL, 
         "created_at" TIMESTAMP NOT NULL DEFAULT now(), 
@@ -37,6 +34,5 @@ export class CreateFlowLogTable1772057339439 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX "public"."IDX_e655b9790ed7219138ea8b5d03"`);
     await queryRunner.query(`DROP INDEX "public"."IDX_d5a593e8ed7918f2320e184faf"`);
     await queryRunner.query(`DROP TABLE "flow_logs"`);
-    await queryRunner.query(`DROP TYPE "public"."flow_logs_action_enum"`);
   }
 }

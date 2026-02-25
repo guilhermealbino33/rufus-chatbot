@@ -5,9 +5,6 @@ export class CreateMessageLogTable1772057318994 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TYPE "public"."message_logs_direction_enum" AS ENUM('INBOUND', 'OUTBOUND')`,
-    );
-    await queryRunner.query(
       `CREATE TABLE "message_logs" (
         "id" SERIAL NOT NULL, 
         "created_at" TIMESTAMP NOT NULL DEFAULT now(), 
@@ -21,6 +18,5 @@ export class CreateMessageLogTable1772057318994 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "message_logs"`);
-    await queryRunner.query(`DROP TYPE "public"."message_logs_direction_enum"`);
   }
 }
