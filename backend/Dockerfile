@@ -42,25 +42,6 @@ FROM node:20-bookworm-slim
 
 WORKDIR /usr/src/app
 
-# Copia apenas os arquivos necessários da etapa de construção
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/package*.json ./
-
-RUN npm ci --omit=dev
-
-# Usuário não-root
-RUN chown -R node:node /usr/src/app
-USER node
-
-EXPOSE 3000
-
-# Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
-COPY wait-for-it.sh /usr/local/bin/wait-for-it
-RUN chmod +x /usr/local/bin/wait-for-it
-
-CMD ["wait-for-it", "db:5432", "--", "node", "dist/main"]
-FROM node:20-bookworm-slim
-
 # Dependências de sistema para Chromium (evita "Chromium not found" em produção)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -89,18 +70,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-WORKDIR /usr/src/app
+# Copia apenas os arquivos necessários da etapa de construção
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
 
-COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY . .
-RUN npm run build
+# Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
+COPY wait-for-it.sh /usr/local/bin/wait-for-it
+RUN chmod +x /usr/local/bin/wait-for-it
 
-# Usuário não-root (recomendado; --no-sandbox já está nos browserArgs do app)
+# Usuário não-root
 RUN chown -R node:node /usr/src/app
 USER node
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+CMD ["wait-for-it", "db:5432", "--", "node", "dist/main"]
