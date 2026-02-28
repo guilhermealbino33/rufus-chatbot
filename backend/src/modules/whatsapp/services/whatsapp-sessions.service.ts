@@ -190,9 +190,15 @@ export class WhatsappSessionsService {
     page = 1,
     limit = 10,
   }: SearchSessionsDTO): Promise<PaginationResponse<WhatsappSession>> {
+    const countAll = await this.sessionRepository.count();
+    this.logger.log(
+      `Searching sessions - Page: ${page}, Limit: ${limit} (Total in DB: ${countAll})`,
+    );
+
     const [data, total] = await this.sessionRepository.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+      order: { createdAt: 'DESC' } as any,
     });
 
     const pages = Math.ceil(total / limit);
