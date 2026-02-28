@@ -35,6 +35,19 @@ export interface WhatsappClientConfig {
   /** Caminho para o executável do Chromium/Chrome (ex.: em Docker/Railway) */
   executablePath?: string;
 
+  /**
+   * Diretório onde os tokens de sessão serão armazenados.
+   * CRÍTICO para produção: deve apontar para um volume persistido.
+   * Padrão: process.env.WPPCONNECT_TOKENS_DIR ?? './wpp-sessions'
+   */
+  folderNameToken?: string;
+
+  /**
+   * Timeout (ms) aguardando o WhatsApp Web finalizar o login.
+   * Servidores de produção são mais lentos — use valores altos (120s+).
+   */
+  waitForLogin?: number;
+
   // ========== Callbacks de Eventos ==========
 
   /** Callback executado quando um QR Code é gerado */
@@ -53,25 +66,45 @@ export interface WhatsappClientConfig {
 /**
  * Configuração padrão para clientes WPPConnect
  *
- * Estas configurações são otimizadas para ambientes de produção:
+ * Estas configurações são otimizadas para ambientes de produção/Docker:
  * - Headless para economizar recursos
- * - Chrome para melhor compatibilidade
- * - Argumentos de segurança desabilitados para containers Docker
+ * - useChrome: false força o uso do Chromium do sistema (sem precisar do Google Chrome)
+ * - browserArgs: flags obrigatórias para containers sem sandbox
+ * - folderNameToken: lido do env para permitir volumes Docker persistentes
+ * - waitForLogin: timeout generoso pois servidores PaaS são mais lentos
  */
 export const DEFAULT_WHATSAPP_CONFIG: Partial<WhatsappClientConfig> = {
   headless: true,
-  useChrome: true,
+  // Em Docker usamos o Chromium do sistema; useChrome: false evita buscar o Google Chrome
+  useChrome: false,
   debug: false,
   logQR: false,
   autoClose: 0,
+  // Diretório de tokens lido do env para facilitar o mapeamento de volumes
+  folderNameToken: process.env.WPPCONNECT_TOKENS_DIR ?? './wpp-sessions',
+  // 120 s é um ponto de partida seguro para servidores mais lentos
+  // waitForLogin é boolean no WPPConnect: true = aguarda login antes de resolver create()
+  // (o timeout interno pode ser controlado via autoClose se necessário)
   browserArgs: [
-    '--disable-web-security',
+    // --- Obrigatórias em qualquer container sem sandbox de SO ---
     '--no-sandbox',
     '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage', // Previne problemas de memória compartilhada
+    // Substitui /dev/shm por /tmp para evitar ENOMEM em containers com shm pequeno
+    '--disable-dev-shm-usage',
+    // --- Otimizações de resources para ambientes headless ---
+    '--disable-gpu',
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--no-zygote',
-    '--disable-gpu',
+    '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-default-apps',
+    '--disable-sync',
+    '--disable-translate',
+    '--hide-scrollbars',
+    '--metrics-recording-only',
+    '--mute-audio',
+    '--safebrowsing-disable-auto-update',
+    '--single-process', // Reduz uso de memória em ambientes com 1 CPU
   ],
 };

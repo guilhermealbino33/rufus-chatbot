@@ -74,6 +74,10 @@ export class WhatsappClientFactory {
       logQR: config.logQR ?? DEFAULT_WHATSAPP_CONFIG.logQR,
       autoClose: config.autoClose ?? DEFAULT_WHATSAPP_CONFIG.autoClose,
       browserArgs: config.browserArgs ?? DEFAULT_WHATSAPP_CONFIG.browserArgs,
+      // Diretório onde os tokens de reautenticação ficam salvos (DEVE ser volume persistido)
+      folderNameToken: config.folderNameToken ?? DEFAULT_WHATSAPP_CONFIG.folderNameToken,
+      // true: create() só resolve após o WhatsApp estar autenticado (flag boolean na API)
+      waitForLogin: true,
       devtools: false,
       ...(executablePath && {
         puppeteerOptions: { executablePath },
@@ -93,8 +97,17 @@ export class WhatsappClientFactory {
       options.phoneNumber = config.phoneNumber;
     }
 
+    // statusFind é CRÍTICO para diagnóstico: sempre loga o ciclo de vida da sessão
     if (config.onStatusChange) {
-      options.statusFind = config.onStatusChange;
+      options.statusFind = (status, session) => {
+        this.logger.log(`📡 [statusFind] session=${session} status=${status}`);
+        config.onStatusChange!(status, session);
+      };
+    } else {
+      // Fallback: mesmo sem callback externo, loga o status para debug em produção
+      options.statusFind = (status, session) => {
+        this.logger.log(`📡 [statusFind] session=${session} status=${status}`);
+      };
     }
 
     return options;
