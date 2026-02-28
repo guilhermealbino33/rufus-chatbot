@@ -65,9 +65,8 @@ class EnvironmentVariables {
   CHROMIUM_EXECUTABLE_PATH: string;
 
   @IsString()
-  @IsDefined({ message: '❌ MISSING_VAR: WHATSAPP_PARTNER_ID' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: WHATSAPP_PARTNER_ID' })
-  WHATSAPP_PARTNER_ID: string = undefined as any;
+  @IsOptional()
+  WHATSAPP_PARTNER_ID: string;
 }
 
 export function validate(config: Record<string, any>) {
