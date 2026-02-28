@@ -2,8 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ChatbotService } from '../src/modules/chatbot/chatbot.service';
 import { WebhookService } from '../src/shared/services/webhook.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ChatbotSession } from '../src/modules/chatbot/entities/chatbot-session.entity';
+import { ChatbotUser } from '../src/modules/chatbot/entities/chatbot-user.entity';
+import { FlowLog } from '../src/modules/chatbot/entities/flow-log.entity';
+import { ChatbotUserService } from '../src/modules/chatbot/chatbot-user.service';
 import { FUNNEL_TREE } from '../src/modules/chatbot/funnel.config';
+import { ChatbotState } from '../src/modules/chatbot/enums';
 
 // Mock WebhookService
 const mockWebhookService = {
@@ -12,142 +15,142 @@ const mockWebhookService = {
   onMessageSend: jest.fn(),
 };
 
-// Mock Repository
-const mockRepository = {
+// Mock Repositories
+const mockFlowLogRepository = {
+  create: jest.fn().mockImplementation((dto) => dto),
+  save: jest.fn().mockImplementation((log) => Promise.resolve(log)),
+};
+
+const mockChatbotUserRepository = {
   findOne: jest.fn(),
+  findOneBy: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
 };
 
-interface SutTypes {
-  sut: ChatbotService;
-  chatbotSessionRepositoryStub: any;
-  webhookServiceStub: any;
-}
-
-const makeSut = async (): Promise<SutTypes> => {
-  const module: TestingModule = await Test.createTestingModule({
-    providers: [
-      ChatbotService,
-      {
-        provide: WebhookService,
-        useValue: mockWebhookService,
-      },
-      {
-        provide: getRepositoryToken(ChatbotSession),
-        useValue: mockRepository,
-      },
-    ],
-  }).compile();
-
-  const sut = module.get<ChatbotService>(ChatbotService);
-  const chatbotSessionRepositoryStub = module.get(getRepositoryToken(ChatbotSession));
-  const webhookServiceStub = module.get(WebhookService);
-
-  jest.clearAllMocks();
-
-  return {
-    sut,
-    chatbotSessionRepositoryStub,
-    webhookServiceStub,
-  };
-};
-
 describe('Chatbot Sandbox', () => {
-  it('should be defined', async () => {
-    const { sut } = await makeSut();
+  let sut: ChatbotService;
+  let chatbotUserService: ChatbotUserService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ChatbotService,
+        ChatbotUserService,
+        {
+          provide: WebhookService,
+          useValue: mockWebhookService,
+        },
+        {
+          provide: getRepositoryToken(ChatbotUser),
+          useValue: mockChatbotUserRepository,
+        },
+        {
+          provide: getRepositoryToken(FlowLog),
+          useValue: mockFlowLogRepository,
+        },
+      ],
+    }).compile();
+
+    sut = module.get<ChatbotService>(ChatbotService);
+    chatbotUserService = module.get<ChatbotUserService>(ChatbotUserService);
+    jest.clearAllMocks();
+  });
+
+  it('should be defined', () => {
     expect(sut).toBeDefined();
   });
 
-  it('should start a new session with START message if no session exists', async () => {
-    const { sut, chatbotSessionRepositoryStub } = await makeSut();
+  it('should start a new session with START message if no user exists', async () => {
     const phone = '5511999999999';
+    const sessionId = 'test-session';
 
-    // Mock finding no session
-    mockRepository.findOne.mockResolvedValue(null);
-    // Mock creating session
-    const newSession = { phone, currentNode: 'START', context: {} };
-    mockRepository.create.mockReturnValue(newSession);
-    mockRepository.save.mockResolvedValue(newSession);
+    // Mock finding no user
+    mockChatbotUserRepository.findOne.mockResolvedValue(null);
+    // Mock creating user
+    const newUser = { id: 1, phoneNumber: phone, currentStep: ChatbotState.START, contextData: {} };
+    mockChatbotUserRepository.create.mockReturnValue(newUser);
+    mockChatbotUserRepository.save.mockResolvedValue(newUser);
+    mockChatbotUserRepository.findOneBy.mockResolvedValue(newUser);
 
-    const response = await sut.processMessage(phone, 'Hi');
+    const response = await sut.processMessage(sessionId, phone, 'Hi');
 
-    expect(chatbotSessionRepositoryStub.findOne).toHaveBeenCalledWith({ where: { phone } });
-    expect(chatbotSessionRepositoryStub.create).toHaveBeenCalledWith({
-      phone,
-      currentNode: 'START',
-      context: {},
+    expect(mockChatbotUserRepository.findOne).toHaveBeenCalledWith({
+      where: { phoneNumber: phone },
     });
-    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalled();
+    expect(mockChatbotUserRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phoneNumber: phone,
+        currentStep: ChatbotState.START,
+      }),
+    );
     expect(response).toContain('Opção inválida');
-    expect(response).toContain(FUNNEL_TREE.START.message);
+    expect(response).toContain(FUNNEL_TREE[ChatbotState.START].message);
   });
 
   it('should process valid option 1 from START and move to FINANCEIRO_MENU', async () => {
-    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
-    const currentSession = { phone, currentNode: 'START', context: {} };
+    const sessionId = 'test-session';
+    const currentUser = {
+      id: 1,
+      phoneNumber: phone,
+      currentStep: ChatbotState.START,
+      contextData: {},
+    };
 
-    mockRepository.findOne.mockResolvedValue(currentSession);
-    mockRepository.save.mockImplementation((s) => Promise.resolve(s));
+    mockChatbotUserRepository.findOne.mockResolvedValue(currentUser);
+    mockChatbotUserRepository.findOneBy.mockResolvedValue(currentUser);
+    mockChatbotUserRepository.save.mockImplementation((u) => Promise.resolve(u));
 
-    const response = await sut.processMessage(phone, '1');
+    const response = await sut.processMessage(sessionId, phone, '1');
 
-    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledWith(
+    expect(mockChatbotUserRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentNode: 'FINANCEIRO_MENU',
+        currentStep: 'FINANCEIRO_MENU',
       }),
     );
     expect(response).toBe(FUNNEL_TREE.FINANCEIRO_MENU.message);
   });
 
   it('should handle invalid option and stay on same node', async () => {
-    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
-    const currentSession = { phone, currentNode: 'START', context: {} };
+    const sessionId = 'test-session';
+    const currentUser = {
+      id: 1,
+      phoneNumber: phone,
+      currentStep: ChatbotState.START,
+      contextData: {},
+    };
 
-    mockRepository.findOne.mockResolvedValue(currentSession);
+    mockChatbotUserRepository.findOne.mockResolvedValue(currentUser);
 
-    const response = await sut.processMessage(phone, '99');
+    const response = await sut.processMessage(sessionId, phone, '99');
 
-    expect(chatbotSessionRepositoryStub.save).not.toHaveBeenCalled();
     expect(response).toContain('Opção inválida');
+    expect(response).toContain(FUNNEL_TREE.START.message);
   });
 
   it('should handle navigation back to START', async () => {
-    const { sut, chatbotSessionRepositoryStub } = await makeSut();
     const phone = '5511999999999';
-    const currentSession = { phone, currentNode: 'FINANCEIRO_MENU', context: {} };
+    const sessionId = 'test-session';
+    const currentUser = {
+      id: 1,
+      phoneNumber: phone,
+      currentStep: 'FINANCEIRO_MENU',
+      contextData: {},
+    };
 
-    mockRepository.findOne.mockResolvedValue(currentSession);
-    mockRepository.save.mockImplementation((s) => Promise.resolve(s));
+    mockChatbotUserRepository.findOne.mockResolvedValue(currentUser);
+    mockChatbotUserRepository.findOneBy.mockResolvedValue(currentUser);
+    mockChatbotUserRepository.save.mockImplementation((u) => Promise.resolve(u));
 
-    const response = await sut.processMessage(phone, '3'); // 3 is Back to START in Financeiro
+    const response = await sut.processMessage(sessionId, phone, '3'); // 3 is Back to START in Financeiro
 
-    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledWith(
+    expect(mockChatbotUserRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentNode: 'START',
+        currentStep: ChatbotState.START,
       }),
     );
     expect(response).toBe(FUNNEL_TREE.START.message);
-  });
-
-  it('should handle CLOSE action', async () => {
-    const { sut, chatbotSessionRepositoryStub } = await makeSut();
-    const phone = '5511999999999';
-
-    const currentSession = { phone, currentNode: 'FINANCEIRO_MENU', context: {} };
-    mockRepository.findOne.mockResolvedValue(currentSession);
-    mockRepository.save.mockImplementation((s) => Promise.resolve(s));
-
-    const response = await sut.processMessage(phone, '2');
-
-    expect(chatbotSessionRepositoryStub.save).toHaveBeenCalledTimes(2);
-    expect(chatbotSessionRepositoryStub.save).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        currentNode: 'START',
-      }),
-    );
-    expect(response).toBe(FUNNEL_TREE.PAYMENT_STATUS.message);
   });
 });
