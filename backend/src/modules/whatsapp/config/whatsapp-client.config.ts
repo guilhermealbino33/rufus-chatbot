@@ -105,6 +105,7 @@ export const DEFAULT_WHATSAPP_CONFIG: Partial<WhatsappClientConfig> = {
     '--metrics-recording-only',
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
-    '--single-process', // Reduz uso de memória em ambientes com 1 CPU
+    '--disable-features=AudioServiceOutOfProcess',
+    // '--- Removed --single-process as it is unstable in specific headless environments ---'
   ],
 };
