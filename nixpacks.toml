@@ -1,0 +1,22 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+# Bibliotecas essenciais para o Chromium/Puppeteer rodar em Debian/Ubuntu (usado pelo WPPConnect)
+aptPkgs = [
+  "libnss3",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libdrm2",
+  "libgbm1",
+  "libasound2",
+  "libpangocairo-1.0-0",
+  "libxrender1",
+  "libxss1",
+  "libxtst6"
+]
+
+[phases.build]
+cmds = ["npm ci", "npm run build --workspace=rufus-chatbot-api"]
+
+[start]
+cmd = "npm run start:prod --workspace=rufus-chatbot-api"
