@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdbus-1-3 \
     libdrm2 \
     libgbm1 \
+    libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
@@ -64,9 +65,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdbus-1-3 \
     libdrm2 \
     libgbm1 \
+    libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
+    libnss3-tools \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libx11-xcb1 \
