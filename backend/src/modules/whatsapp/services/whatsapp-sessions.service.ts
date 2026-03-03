@@ -326,14 +326,14 @@ export class WhatsappSessionsService {
       let isResolved = false;
 
       this.logger.log(
-        `⏳ Starting initializeClient promise for: ${sessionName} (Timeout: ${timeoutMs / 1000}s)`,
+        `Starting initializeClient promise for: ${sessionName} (Timeout: ${timeoutMs / 1000}s)`,
       );
 
       const timeoutId = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
           this.logger.error(
-            `❌ Timeout generating QR/Link Code for ${sessionName} after ${timeoutMs / 1000}s`,
+            `[WARNING] Timeout generating QR/Link Code for ${sessionName} after ${timeoutMs / 1000}s`,
           );
           reject(
             new RequestTimeoutException(
@@ -347,7 +347,7 @@ export class WhatsappSessionsService {
         sessionName,
         onQRCode: (base64Qr) => {
           if (!isResolved && pairingMode === 'qrcode') {
-            this.logger.log(`✅ QR Code captured for ${sessionName}`);
+            this.logger.log(`QR Code captured for ${sessionName}`);
             this.handleQRCode(sessionName, base64Qr);
             isResolved = true;
             clearTimeout(timeoutId);
@@ -356,7 +356,7 @@ export class WhatsappSessionsService {
         },
         onLinkCode: (code) => {
           if (!isResolved && pairingMode === 'phone') {
-            this.logger.log(`✅ Link Code captured for ${sessionName}: ${code}`);
+            this.logger.log(`Link Code captured for ${sessionName}: ${code}`);
             isResolved = true;
             clearTimeout(timeoutId);
             resolve({ status: SessionStatus.CONNECTING, code });
@@ -364,22 +364,22 @@ export class WhatsappSessionsService {
         },
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
         onStatusChange: (status, session) => {
-          this.logger.log(`📡 [onStatusChange] session=${session} status=${status}`);
+          this.logger.log(`[STATUS] [onStatusChange] session=${session} status=${status}`);
           this.handleStatusChange(sessionName, status).catch((err) => {
             this.logger.error(
-              `❌ Failed to persist status change for ${sessionName}: ${err.message}`,
+              `[WARNING] Failed to persist status change for ${sessionName}: ${err.message}`,
             );
           });
         },
       };
 
-      this.logger.log(`🛠️ Triggering clientManager.createClient for: ${sessionName}...`);
+      this.logger.log(`Triggering clientManager.createClient for: ${sessionName}...`);
 
       // ✅ Delegate creation to Manager
       this.clientManager
         .createClient(sessionName, config)
         .then(async (client) => {
-          this.logger.log(`🎉 clientManager.createClient resolved for: ${sessionName}`);
+          this.logger.log(`clientManager.createClient resolved for: ${sessionName}`);
 
           // Register message listener
           client.onMessage(async (message) => {
@@ -389,7 +389,7 @@ export class WhatsappSessionsService {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            this.logger.log(`✅ Session ${sessionName} connected successfully.`);
+            this.logger.log(`Session ${sessionName} connected successfully.`);
             resolve({ status: SessionStatus.CONNECTED });
           }
         })
@@ -398,7 +398,7 @@ export class WhatsappSessionsService {
             isResolved = true;
             clearTimeout(timeoutId);
             this.logger.error(
-              `❌ Error in clientManager.createClient for ${sessionName}: ${error.message}`,
+              `[WARNING] Error in clientManager.createClient for ${sessionName}: ${error.message}`,
             );
             reject(error);
           }

@@ -37,10 +37,10 @@ export class WhatsappClientFactory {
 
     try {
       const client = await wppconnect.create(options);
-      this.logger.log(`✅ Client created successfully for: ${config.sessionName}`);
+      this.logger.log(`Client created successfully for: ${config.sessionName}`);
       return client;
     } catch (error) {
-      this.logger.error(`❌ Failed to create client for ${config.sessionName}:`, error);
+      this.logger.error(`[WARNING] Failed to create client for ${config.sessionName}:`, error);
 
       // Detecta erro específico de browser já rodando
       if (
@@ -100,13 +100,13 @@ export class WhatsappClientFactory {
     // statusFind é CRÍTICO para diagnóstico: sempre loga o ciclo de vida da sessão
     if (config.onStatusChange) {
       options.statusFind = (status, session) => {
-        this.logger.log(`📡 [statusFind] session=${session} status=${status}`);
+        this.logger.log(`[STATUS] [statusFind] session=${session} status=${status}`);
         config.onStatusChange!(status, session);
       };
     } else {
       // Fallback: mesmo sem callback externo, loga o status para debug em produção
       options.statusFind = (status, session) => {
-        this.logger.log(`📡 [statusFind] session=${session} status=${status}`);
+        this.logger.log(`[STATUS] [statusFind] session=${session} status=${status}`);
       };
     }
 
