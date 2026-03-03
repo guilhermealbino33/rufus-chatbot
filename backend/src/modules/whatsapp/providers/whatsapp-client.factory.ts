@@ -33,14 +33,31 @@ export class WhatsappClientFactory {
   async create(config: WhatsappClientConfig): Promise<wppconnect.Whatsapp> {
     this.logger.log(`Creating WPPConnect client for session: ${config.sessionName}`);
 
+    const executablePath = config.executablePath ?? this.whatsappCfg.chromiumExecutablePath;
+
+    // [DIAG] Pré-diagnóstico do ambiente antes de lançar o Chromium
+    this.logger.log(
+      `[DIAG] wppconnect.create() PRE-LAUNCH | session=${config.sessionName} | executablePath=${executablePath ?? 'auto-detect'} | hasPhoneNumber=${!!config.phoneNumber}`,
+    );
+    this.logger.log(
+      `[DIAG] Browser config | headless=${DEFAULT_WHATSAPP_CONFIG.headless} | useChrome=${DEFAULT_WHATSAPP_CONFIG.useChrome} | browserArgs.count=${DEFAULT_WHATSAPP_CONFIG.browserArgs?.length ?? 0}`,
+    );
+
     const options = this.buildWppConnectOptions(config);
 
     try {
+      this.logger.log(`[DIAG] Launching Chromium for session=${config.sessionName}...`);
       const client = await wppconnect.create(options);
-      this.logger.log(`Client created successfully for: ${config.sessionName}`);
+      this.logger.log(
+        `[DIAG] wppconnect.create() returned (login complete) for session=${config.sessionName}`,
+      );
       return client;
     } catch (error) {
-      this.logger.error(`[WARNING] Failed to create client for ${config.sessionName}:`, error);
+      // [DIAG] Stack trace completo — expõe falhas silenciosas do Puppeteer/Chromium
+      this.logger.error(
+        `[DIAG] wppconnect.create() THREW for session=${config.sessionName}: ${error.message}`,
+        error.stack,
+      );
 
       // Detecta erro específico de browser já rodando
       if (

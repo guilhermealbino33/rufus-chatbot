@@ -41,6 +41,13 @@ export class WhatsappSessionsService {
     pairingMode,
     phoneNumber,
   }: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
+    // [DIAG] Log de entrada — valida que o Controller chegou até o Service
+    const maskedPhone = phoneNumber
+      ? `${phoneNumber.slice(0, 4)}****${phoneNumber.slice(-2)}`
+      : 'N/A';
+    this.logger.log(
+      `[DIAG] start() entered | session=${sessionName} | mode=${pairingMode ?? 'qrcode'} | phone=${maskedPhone}`,
+    );
     // ========== ETAPA 1: Verificação de Singleton ==========
     // Previne múltiplas inicializações simultâneas
     if (this.clientManager.isClientInitializing(sessionName)) {
@@ -343,9 +350,22 @@ export class WhatsappSessionsService {
         }
       }, timeoutMs);
 
+      // [DIAG] Validação de pré-condições antes de criar o cliente
+      this.logger.log(
+        `[DIAG] initializeClient: pairingMode=${pairingMode} | hasPhoneNumber=${!!phoneNumber}`,
+      );
+      if (pairingMode === 'phone' && !phoneNumber) {
+        this.logger.warn(
+          `[DIAG] WARNING: pairingMode=phone but no phoneNumber provided for session=${sessionName}. catchLinkCode will NEVER fire!`,
+        );
+      }
+
       const config: WhatsappClientConfig = {
         sessionName,
         onQRCode: (base64Qr) => {
+          this.logger.log(
+            `[DIAG] onQRCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
+          );
           if (!isResolved && pairingMode === 'qrcode') {
             this.logger.log(`QR Code captured for ${sessionName}`);
             this.handleQRCode(sessionName, base64Qr);
@@ -355,6 +375,9 @@ export class WhatsappSessionsService {
           }
         },
         onLinkCode: (code) => {
+          this.logger.log(
+            `[DIAG] onLinkCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
+          );
           if (!isResolved && pairingMode === 'phone') {
             this.logger.log(`Link Code captured for ${sessionName}: ${code}`);
             isResolved = true;
@@ -373,13 +396,15 @@ export class WhatsappSessionsService {
         },
       };
 
-      this.logger.log(`Triggering clientManager.createClient for: ${sessionName}...`);
+      this.logger.log(`[DIAG] Triggering clientManager.createClient for: ${sessionName}...`);
 
       // ✅ Delegate creation to Manager
       this.clientManager
         .createClient(sessionName, config)
         .then(async (client) => {
-          this.logger.log(`clientManager.createClient resolved for: ${sessionName}`);
+          this.logger.log(
+            `[DIAG] clientManager.createClient resolved for: ${sessionName} | isResolved=${isResolved}`,
+          );
 
           // Register message listener
           client.onMessage(async (message) => {
@@ -397,8 +422,10 @@ export class WhatsappSessionsService {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
+            // [DIAG] Stack trace completo — expõe erros silenciosos do Puppeteer
             this.logger.error(
-              `[WARNING] Error in clientManager.createClient for ${sessionName}: ${error.message}`,
+              `[DIAG] clientManager.createClient REJECTED for ${sessionName}: ${error.message}`,
+              error.stack,
             );
             reject(error);
           }
@@ -467,7 +494,11 @@ export class WhatsappSessionsService {
    * @param error - Erro que causou a falha
    */
   private async handleInitializationError(sessionName: string, error: any): Promise<void> {
-    this.logger.error(`Initialization failed for ${sessionName}: ${error.message}`);
+    // [DIAG] Stack trace completo — crítico para diagnóstico de erros Puppeteer/WPPConnect
+    this.logger.error(
+      `[DIAG] Initialization FAILED for session=${sessionName}: ${error.message}`,
+      error.stack,
+    );
 
     try {
       // Atualiza estado para DISCONNECTED
