@@ -41,13 +41,14 @@ export class WhatsappSessionsService {
     pairingMode,
     phoneNumber,
   }: CreateSessionDTO): Promise<WhatsappSessionStartResponse> {
-    // [DIAG] Log de entrada — valida que o Controller chegou até o Service
     const maskedPhone = phoneNumber
       ? `${phoneNumber.slice(0, 4)}****${phoneNumber.slice(-2)}`
       : 'N/A';
-    this.logger.log(
-      `[DIAG] start() entered | session=${sessionName} | mode=${pairingMode ?? 'qrcode'} | phone=${maskedPhone}`,
-    );
+
+    this.logger.log({
+      severity: 'LOG',
+      message: `Entrou método start | session=${sessionName} | mode=${pairingMode ?? 'qrcode'} | phone=${maskedPhone}`,
+    });
     // ========== ETAPA 1: Verificação de Singleton ==========
     // Previne múltiplas inicializações simultâneas
     if (this.clientManager.isClientInitializing(sessionName)) {
@@ -62,12 +63,18 @@ export class WhatsappSessionsService {
     if (this.clientManager.hasClient(sessionName)) {
       const isConnected = await this.clientManager.isClientConnected(sessionName);
       if (isConnected) {
-        this.logger.log(`Session ${sessionName} already connected in memory`);
+        this.logger.log({
+          severity: 'LOG',
+          message: `Session ${sessionName} already connected in memory`,
+        });
         return { status: SessionStatus.CONNECTED };
       }
 
       // Cliente existe mas não está conectado - fazer cleanup
-      this.logger.warn(`Session ${sessionName} exists in memory but not connected. Cleaning up...`);
+      this.logger.warn({
+        severity: 'WARNING',
+        message: `Sessão ${sessionName} exists in memory but not connected. Cleaning up...`,
+      });
       await this.clientManager.forceCloseClient(sessionName);
     }
 
@@ -78,11 +85,17 @@ export class WhatsappSessionsService {
     if (session) {
       if (session.status === SessionStatus.CONNECTING) {
         // Sessão travada em CONNECTING - provavelmente de uma tentativa anterior que falhou
-        this.logger.warn(`Session ${sessionName} stuck in CONNECTING state. Attempting cleanup...`);
+        this.logger.warn({
+          severity: 'WARNING',
+          message: `Sessão ${sessionName} travada em CONNECTING. Tentando limpar...`,
+        });
         await this.cleanupStuckSession(sessionName);
         session = null; // Reset para criar nova
       } else if (session.status !== SessionStatus.CONNECTED) {
-        this.logger.log(`Session ${sessionName} exists with status ${session.status}. Deleting...`);
+        this.logger.log({
+          severity: 'LOG',
+          message: `Sessão ${sessionName} existe com status ${session.status}. Deletando...`,
+        });
         await this.delete(sessionName);
         session = null; // Reset para criar nova
       }
@@ -96,7 +109,10 @@ export class WhatsappSessionsService {
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
       });
       await this.sessionRepository.save(session);
-      this.logger.log(`Session ${sessionName} created with CONNECTING status`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `Sessão ${sessionName} criada com status CONNECTING`,
+      });
     } else {
       await this.sessionRepository.update(
         { sessionName },
@@ -105,12 +121,18 @@ export class WhatsappSessionsService {
           phoneNumber: pairingMode === 'phone' ? phoneNumber : session.phoneNumber,
         },
       );
-      this.logger.log(`Session ${sessionName} updated to CONNECTING status`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `Sessão ${sessionName} atualizada para CONNECTING`,
+      });
     }
 
     // ========== ETAPA 5: Inicializar Cliente WPPConnect ==========
     try {
-      this.logger.log(`Starting session: ${sessionName} (Mode: ${pairingMode || 'qrcode'})`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `Iniciando sessão: ${sessionName} (Modo: ${pairingMode || 'qrcode'})`,
+      });
       return await this.initializeClient(sessionName, pairingMode, phoneNumber);
     } catch (error) {
       // Rollback do estado em caso de erro
@@ -139,9 +161,10 @@ export class WhatsappSessionsService {
     if (!session) return SessionStatus.DISCONNECTED;
 
     if (session.status === 'connected' || session.status === SessionStatus.CONNECTED) {
-      this.logger.log(
-        `Session ${sessionName} found in DB as connected but missing from memory. Attempting recovery...`,
-      );
+      this.logger.log({
+        severity: 'LOG',
+        message: `Sessão ${sessionName} encontrada no banco como conectada mas ausente da memória. Tentando recuperação...`,
+      });
 
       this.recoverSession(sessionName);
 
@@ -156,7 +179,7 @@ export class WhatsappSessionsService {
     if (!session) {
       throw new NotFoundException({
         success: false,
-        message: 'Session not found',
+        message: 'Sessão não encontrada',
       });
     }
     return {
@@ -187,7 +210,7 @@ export class WhatsappSessionsService {
     } catch (error) {
       throw new InternalServerErrorException({
         success: false,
-        message: 'Failed to get sessions',
+        message: 'Falha ao buscar sessões',
         error: error.message,
       });
     }
@@ -198,9 +221,10 @@ export class WhatsappSessionsService {
     limit = 10,
   }: SearchSessionsDTO): Promise<PaginationResponse<WhatsappSession>> {
     const countAll = await this.sessionRepository.count();
-    this.logger.log(
-      `Searching sessions - Page: ${page}, Limit: ${limit} (Total in DB: ${countAll})`,
-    );
+    this.logger.log({
+      severity: 'LOG',
+      message: `Buscando sessões - Página: ${page}, Limite: ${limit} (Total no banco: ${countAll})`,
+    });
 
     const [data, total] = await this.sessionRepository.findAndCount({
       skip: (page - 1) * limit,
@@ -219,7 +243,7 @@ export class WhatsappSessionsService {
     if (!session) {
       throw new NotFoundException({
         success: false,
-        message: 'Session not found',
+        message: 'Sessão não encontrada',
       });
     }
 
@@ -228,15 +252,15 @@ export class WhatsappSessionsService {
       await this.clientManager.removeClient(sessionName);
 
       await this.sessionRepository.delete({ sessionName });
-      this.logger.log(`Session ${sessionName} deleted`);
+      this.logger.log({ severity: 'LOG', message: `Sessão ${sessionName} deletada` });
       return {
         success: true,
-        message: 'Session deleted successfully',
+        message: 'Sessão deletada com sucesso',
       };
     } catch (error) {
       throw new InternalServerErrorException({
         success: false,
-        message: 'Failed to delete session',
+        message: 'Falha ao deletar sessão',
         error: error.message,
       });
     }
@@ -249,7 +273,7 @@ export class WhatsappSessionsService {
       if (!session) {
         throw new NotFoundException({
           success: false,
-          message: 'Session not found in database',
+          message: 'Sessão não encontrada no banco de dados',
         });
       }
 
@@ -273,7 +297,7 @@ export class WhatsappSessionsService {
       }
       throw new InternalServerErrorException({
         success: false,
-        message: 'Failed to get session status',
+        message: 'Falha ao obter status da sessão',
         error: error.message,
       });
     }
@@ -292,7 +316,7 @@ export class WhatsappSessionsService {
           success: true,
           data: {
             status: SessionStatus.CONNECTED,
-            message: 'Session is already connected',
+            message: 'Sessão já está conectada',
           },
         };
       }
@@ -300,7 +324,7 @@ export class WhatsappSessionsService {
       if (!session.qrCode) {
         return {
           success: false,
-          message: 'QR Code not available. Please start a session first.',
+          message: 'QR Code não disponível. Por favor, inicie uma sessão primeiro.',
         };
       }
 
@@ -317,7 +341,7 @@ export class WhatsappSessionsService {
       }
       throw new InternalServerErrorException({
         success: false,
-        message: 'Failed to get QR Code',
+        message: 'Falha ao obter QR Code',
         error: error.message,
       });
     }
@@ -332,42 +356,45 @@ export class WhatsappSessionsService {
       const timeoutMs = 120000; // Aumentado para 120s para servidores de produção lentos
       let isResolved = false;
 
-      this.logger.log(
-        `Starting initializeClient promise for: ${sessionName} (Timeout: ${timeoutMs / 1000}s)`,
-      );
+      this.logger.log({
+        severity: 'LOG',
+        message: `Iniciando promise initializeClient para: ${sessionName} (Timeout: ${timeoutMs / 1000}s)`,
+      });
 
       const timeoutId = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
-          this.logger.error(
-            `[WARNING] Timeout generating QR/Link Code for ${sessionName} after ${timeoutMs / 1000}s`,
-          );
+          this.logger.error({
+            severity: 'ERROR',
+            message: `[WARNING] Timeout gerando QR/Link Code para ${sessionName} após ${timeoutMs / 1000}s`,
+          });
           reject(
-            new RequestTimeoutException(
-              `Timeout generating QR Code for ${sessionName} (120s limit)`,
-            ),
+            new RequestTimeoutException(`Timeout gerando QR Code para ${sessionName} (120s limit)`),
           );
         }
       }, timeoutMs);
 
       // [DIAG] Validação de pré-condições antes de criar o cliente
-      this.logger.log(
-        `[DIAG] initializeClient: pairingMode=${pairingMode} | hasPhoneNumber=${!!phoneNumber}`,
-      );
+      this.logger.log({
+        severity: 'LOG',
+        message: `[DIAG] initializeClient: pairingMode=${pairingMode} | hasPhoneNumber=${!!phoneNumber}`,
+      });
       if (pairingMode === 'phone' && !phoneNumber) {
-        this.logger.warn(
-          `[DIAG] WARNING: pairingMode=phone but no phoneNumber provided for session=${sessionName}. catchLinkCode will NEVER fire!`,
-        );
+        this.logger.warn({
+          severity: 'WARNING',
+          message: `[DIAG] pairingMode=phone mas nenhum phoneNumber fornecido para session=${sessionName}. catchLinkCode nunca será acionado!`,
+        });
       }
 
       const config: WhatsappClientConfig = {
         sessionName,
         onQRCode: (base64Qr) => {
-          this.logger.log(
-            `[DIAG] onQRCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
-          );
+          this.logger.log({
+            severity: 'LOG',
+            message: `[DIAG] onQRCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
+          });
           if (!isResolved && pairingMode === 'qrcode') {
-            this.logger.log(`QR Code captured for ${sessionName}`);
+            this.logger.log({ severity: 'LOG', message: `QR Code capturado para ${sessionName}` });
             this.handleQRCode(sessionName, base64Qr);
             isResolved = true;
             clearTimeout(timeoutId);
@@ -375,11 +402,15 @@ export class WhatsappSessionsService {
           }
         },
         onLinkCode: (code) => {
-          this.logger.log(
-            `[DIAG] onLinkCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
-          );
+          this.logger.log({
+            severity: 'LOG',
+            message: `[DIAG] onLinkCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
+          });
           if (!isResolved && pairingMode === 'phone') {
-            this.logger.log(`Link Code captured for ${sessionName}: ${code}`);
+            this.logger.log({
+              severity: 'LOG',
+              message: `Código de link capturado para ${sessionName}: ${code}`,
+            });
             isResolved = true;
             clearTimeout(timeoutId);
             resolve({ status: SessionStatus.CONNECTING, code });
@@ -387,24 +418,32 @@ export class WhatsappSessionsService {
         },
         phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
         onStatusChange: (status, session) => {
-          this.logger.log(`[STATUS] [onStatusChange] session=${session} status=${status}`);
+          this.logger.log({
+            severity: 'LOG',
+            message: `[STATUS] [onStatusChange] sessão=${session} status=${status}`,
+          });
           this.handleStatusChange(sessionName, status).catch((err) => {
-            this.logger.error(
-              `[WARNING] Failed to persist status change for ${sessionName}: ${err.message}`,
-            );
+            this.logger.error({
+              severity: 'ERROR',
+              message: `[WARNING] Falha ao persistir mudança de status para ${sessionName}: ${err.message}`,
+            });
           });
         },
       };
 
-      this.logger.log(`[DIAG] Triggering clientManager.createClient for: ${sessionName}...`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `[DIAG] Triggering clientManager.createClient for: ${sessionName}...`,
+      });
 
-      // ✅ Delegate creation to Manager
+      // Delegate creation to Manager
       this.clientManager
         .createClient(sessionName, config)
         .then(async (client) => {
-          this.logger.log(
-            `[DIAG] clientManager.createClient resolved for: ${sessionName} | isResolved=${isResolved}`,
-          );
+          this.logger.log({
+            severity: 'LOG',
+            message: `[DIAG] clientManager.createClient resolved for: ${sessionName} | isResolved=${isResolved}`,
+          });
 
           // Register message listener
           client.onMessage(async (message) => {
@@ -414,7 +453,10 @@ export class WhatsappSessionsService {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            this.logger.log(`Session ${sessionName} connected successfully.`);
+            this.logger.log({
+              severity: 'LOG',
+              message: `Sessão ${sessionName} conectada com sucesso.`,
+            });
             resolve({ status: SessionStatus.CONNECTED });
           }
         })
@@ -423,10 +465,11 @@ export class WhatsappSessionsService {
             isResolved = true;
             clearTimeout(timeoutId);
             // [DIAG] Stack trace completo — expõe erros silenciosos do Puppeteer
-            this.logger.error(
-              `[DIAG] clientManager.createClient REJECTED for ${sessionName}: ${error.message}`,
-              error.stack,
-            );
+            this.logger.error({
+              severity: 'ERROR',
+              message: `[DIAG] clientManager.createClient REJEITADO para ${sessionName}: ${error.message}`,
+              stack: error.stack,
+            });
             reject(error);
           }
         });
@@ -436,7 +479,7 @@ export class WhatsappSessionsService {
   private async recoverSession(sessionName: string) {
     if (this.clientManager.hasClient(sessionName)) return; // Already recovering or active
 
-    this.logger.log(`Recovering session ${sessionName}...`);
+    this.logger.log({ severity: 'LOG', message: `Recuperando sessão ${sessionName}...` });
     try {
       const config: WhatsappClientConfig = {
         sessionName,
@@ -449,10 +492,16 @@ export class WhatsappSessionsService {
 
       const client = await this.clientManager.createClient(sessionName, config);
       client.onMessage((msg) => this.handleIncomingMessage(sessionName, msg));
-      this.logger.log(`Session ${sessionName} recovered successfully.`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `Sessão ${sessionName} recuperada com sucesso.`,
+      });
       this.updateSessionStatus(sessionName, SessionStatus.CONNECTED);
     } catch (e) {
-      this.logger.error(`Failed to recover session ${sessionName}: ${e.message}`);
+      this.logger.error({
+        severity: 'ERROR',
+        message: `Falha ao recuperar sessão ${sessionName}: ${e.message}`,
+      });
       this.updateSessionStatus(sessionName, SessionStatus.DISCONNECTED);
     }
   }
@@ -475,9 +524,12 @@ export class WhatsappSessionsService {
       // Atualiza estado para DISCONNECTED
       await this.sessionRepository.update({ sessionName }, { status: SessionStatus.DISCONNECTED });
 
-      this.logger.log(`Stuck session ${sessionName} cleaned up`);
+      this.logger.log({ severity: 'LOG', message: `Sessão ${sessionName} limpa com sucesso.` });
     } catch (error) {
-      this.logger.error(`Failed to cleanup stuck session ${sessionName}: ${error.message}`);
+      this.logger.error({
+        severity: 'ERROR',
+        message: `Falha ao limpar sessão ${sessionName}: ${error.message}`,
+      });
       // Não lança erro - apenas loga
     }
   }
@@ -495,10 +547,11 @@ export class WhatsappSessionsService {
    */
   private async handleInitializationError(sessionName: string, error: any): Promise<void> {
     // [DIAG] Stack trace completo — crítico para diagnóstico de erros Puppeteer/WPPConnect
-    this.logger.error(
-      `[DIAG] Initialization FAILED for session=${sessionName}: ${error.message}`,
-      error.stack,
-    );
+    this.logger.error({
+      severity: 'ERROR',
+      message: `[DIAG] Falha na inicialização da sessão ${sessionName}: ${error.message}`,
+      stack: error.stack,
+    });
 
     try {
       // Atualiza estado para DISCONNECTED
@@ -515,7 +568,10 @@ export class WhatsappSessionsService {
         await this.clientManager.forceCloseClient(sessionName);
       }
     } catch (rollbackError) {
-      this.logger.error(`Failed to rollback session ${sessionName}: ${rollbackError.message}`);
+      this.logger.error({
+        severity: 'ERROR',
+        message: `Falha ao recuperar sessão ${sessionName}: ${rollbackError.message}`,
+      });
     }
   }
 
@@ -553,13 +609,17 @@ export class WhatsappSessionsService {
           const device = await client.getHostDevice();
           if (device && device.wid && device.wid.user) {
             updateData.phoneNumber = device.wid.user;
-            this.logger.log(
-              `Session ${sessionName} connected with number: ${updateData.phoneNumber}`,
-            );
+            this.logger.log({
+              severity: 'LOG',
+              message: `Sessão ${sessionName} conectada com o número: ${updateData.phoneNumber}`,
+            });
           }
         }
       } catch (e) {
-        this.logger.warn(`Failed to fetch official phoneNumber for ${sessionName}: ${e.message}`);
+        this.logger.warn({
+          severity: 'WARNING',
+          message: `Falha ao buscar número oficial para ${sessionName}: ${e.message}`,
+        });
       }
     } else if (mappedStatus === SessionStatus.DISCONNECTED) {
       updateData.disconnectedAt = new Date();
@@ -629,7 +689,10 @@ export class WhatsappSessionsService {
   ): Promise<void> {
     try {
       if (!message) {
-        this.logger.warn(`[${sessionName}] Received null or undefined message object`);
+        this.logger.warn({
+          severity: 'WARNING',
+          message: `[${sessionName}] Recebeu objeto de mensagem 'null' ou 'undefined'`,
+        });
         return;
       }
 
@@ -639,15 +702,25 @@ export class WhatsappSessionsService {
           ? (message.id as any)?._serialized || (message.id as any)?.id?.toString()
           : message.id?.toString() || 'unknown';
 
-      this.logger.debug(`[${sessionName}] Raw message: ${JSON.stringify(message, null, 2)}`);
+      this.logger.debug({
+        severity: 'DEBUG',
+        message: `[${sessionName}] Raw message: ${JSON.stringify(message, null, 2)}`,
+      });
 
       const remoteJid = this.getRemoteJid(message);
       if (!remoteJid) {
-        this.logger.warn(`[${sessionName}] Could not determine source:`, { messageId });
+        this.logger.warn({
+          severity: 'WARNING',
+          message: `[${sessionName}] Não foi possível determinar a origem da mensagem:`,
+          messageId,
+        });
         return;
       }
 
-      this.logger.debug(`[${sessionName}] Extracted JID from message: ${remoteJid}`);
+      this.logger.debug({
+        severity: 'DEBUG',
+        message: `[${sessionName}] JID da mensagem extraído: ${remoteJid}`,
+      });
 
       // 2. Transformação com lógica mais clara
       const incomingMessage: IncomingWhatsappMessage = {
@@ -664,7 +737,11 @@ export class WhatsappSessionsService {
 
       this.webhookService.emitMessageReceived(incomingMessage);
     } catch (error) {
-      this.logger.error(`[${sessionName}] Error processing message:`, error);
+      this.logger.error({
+        severity: 'ERROR',
+        message: `[${sessionName}] Erro ao processar mensagem:`,
+        error,
+      });
     }
   }
 }
