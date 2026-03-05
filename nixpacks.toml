@@ -1,5 +1,11 @@
 [phases.setup]
 nixPkgs = ["nodejs_20"]
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+CHROMIUM_EXECUTABLE_PATH = "/usr/bin/chromium"
+
 # Bibliotecas essenciais para o Chromium/Puppeteer rodar em Debian/Ubuntu (usado pelo WPPConnect)
   "chromium",
   "libglib2.0-0",
