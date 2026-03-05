@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
+import * as fs from 'fs';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientConfig, DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
 import { BrowserAlreadyRunningException } from '../exceptions/browser-already-running.exception';
@@ -31,16 +32,70 @@ export class WhatsappClientFactory {
    * @throws InternalServerErrorException se a criação falhar
    */
   async create(config: WhatsappClientConfig): Promise<wppconnect.Whatsapp> {
-    this.logger.log(`Creating WPPConnect client for session: ${config.sessionName}`);
+    this.logger.log({
+      severity: 'LOG',
+      message: `Criando WPPConnect client para sessão: ${config.sessionName}`,
+    });
+
+    const executablePath = config.executablePath ?? this.whatsappCfg.chromiumExecutablePath;
+
+    // [DIAG] Pré-diagnóstico do ambiente antes de lançar o Chromium
+    this.logger.log({
+      severity: 'LOG',
+      message: `[DIAG] wppconnect.create() PRE-LAUNCH | session=${config.sessionName} | executablePath=${executablePath ?? 'auto-detect'} | hasPhoneNumber=${!!config.phoneNumber}`,
+    });
+    this.logger.log({
+      severity: 'LOG',
+      message: `[DIAG] Browser config | headless=${DEFAULT_WHATSAPP_CONFIG.headless} | useChrome=${DEFAULT_WHATSAPP_CONFIG.useChrome} | browserArgs.count=${DEFAULT_WHATSAPP_CONFIG.browserArgs?.length ?? 0}`,
+    });
 
     const options = this.buildWppConnectOptions(config);
 
+    // [DIAG] Valida existência do executablePath antes do launch
+    if (executablePath) {
+      if (fs.existsSync(executablePath)) {
+        this.logger.log({
+          severity: 'LOG',
+          message: `[DIAG] executablePath validado: ${executablePath}`,
+        });
+      } else {
+        this.logger.error({
+          severity: 'ERROR',
+          message:
+            `[DIAG] executablePath NÃO ENCONTRADO: ${executablePath}. ` +
+            `O Puppeteer vai usar auto-detect e pode baixar o Chrome errado! ` +
+            `Verifique se "chromium" está instalado no ambiente e se CHROMIUM_EXECUTABLE_PATH está correto.`,
+        });
+      }
+    } else {
+      this.logger.warn({
+        severity: 'WARNING',
+        message:
+          `[DIAG] executablePath não configurado. ` +
+          `Defina CHROMIUM_EXECUTABLE_PATH nas variáveis de ambiente do Railway.`,
+      });
+    }
+
     try {
+      this.logger.log({
+        severity: 'LOG',
+        message: `[DIAG] Lançando Chromium para sessão=${config.sessionName}...`,
+      });
       const client = await wppconnect.create(options);
-      this.logger.log(`✅ Client created successfully for: ${config.sessionName}`);
+      this.logger.log({
+        severity: 'LOG',
+        message: `[DIAG] wppconnect.create() retornou (login completo) para sessão=${config.sessionName}`,
+      });
       return client;
     } catch (error) {
-      this.logger.error(`❌ Failed to create client for ${config.sessionName}:`, error);
+      // [DIAG] Stack trace completo — expõe falhas silenciosas do Puppeteer/Chromium
+      this.logger.error(
+        {
+          severity: 'ERROR',
+          message: `[DIAG] wppconnect.create() THREW for session=${config.sessionName}: ${error.message}`,
+        },
+        error.stack,
+      );
 
       // Detecta erro específico de browser já rodando
       if (
@@ -74,6 +129,10 @@ export class WhatsappClientFactory {
       logQR: config.logQR ?? DEFAULT_WHATSAPP_CONFIG.logQR,
       autoClose: config.autoClose ?? DEFAULT_WHATSAPP_CONFIG.autoClose,
       browserArgs: config.browserArgs ?? DEFAULT_WHATSAPP_CONFIG.browserArgs,
+      // Diretório onde os tokens de reautenticação ficam salvos (DEVE ser volume persistido)
+      folderNameToken: config.folderNameToken ?? DEFAULT_WHATSAPP_CONFIG.folderNameToken,
+      // true: create() só resolve após o WhatsApp estar autenticado (flag boolean na API)
+      waitForLogin: true,
       devtools: false,
       ...(executablePath && {
         puppeteerOptions: { executablePath },
@@ -93,8 +152,23 @@ export class WhatsappClientFactory {
       options.phoneNumber = config.phoneNumber;
     }
 
+    // statusFind é CRÍTICO para diagnóstico: sempre loga o ciclo de vida da sessão
     if (config.onStatusChange) {
-      options.statusFind = config.onStatusChange;
+      options.statusFind = (status, session) => {
+        this.logger.log({
+          severity: 'LOG',
+          message: `[STATUS] [statusFind] session=${session} status=${status}`,
+        });
+        config.onStatusChange!(status, session);
+      };
+    } else {
+      // Fallback: mesmo sem callback externo, loga o status para debug em produção
+      options.statusFind = (status, session) => {
+        this.logger.log({
+          severity: 'LOG',
+          message: `[STATUS] [statusFind] session=${session} status=${status}`,
+        });
+      };
     }
 
     return options;
