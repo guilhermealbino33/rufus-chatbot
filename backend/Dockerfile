@@ -42,11 +42,16 @@ ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
 WORKDIR /usr/src/app
 
 COPY package*.json ./
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
+
 # Install ALL deps (including devDependencies) so `nest build` / `@nestjs/cli` is available
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run build
+
+# Build the backend workspace
+RUN cd backend && npm run build
 
 # Etapa de produção
 FROM node:20-bookworm-slim
@@ -91,14 +96,14 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
 
-# Copia apenas os arquivos necessários da etapa de construção
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/package*.json ./
+# Copia apenas os arquivos necessários da etapa de construção da workspace do backend
+COPY --from=builder /usr/src/app/backend/dist ./dist
+COPY --from=builder /usr/src/app/backend/package*.json ./
 
 RUN npm ci --omit=dev --ignore-scripts
 
 # Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
-COPY --from=builder /usr/src/app/wait-for-it.sh /usr/local/bin/wait-for-it
+COPY --from=builder /usr/src/app/backend/wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x /usr/local/bin/wait-for-it
 
 # Cria o diretório de sessões e garante permissões para o usuário não-root
