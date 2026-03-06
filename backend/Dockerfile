@@ -97,7 +97,7 @@ COPY --from=builder /usr/src/app/package*.json ./
 RUN npm ci --omit=dev
 
 # Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
-COPY wait-for-it.sh /usr/local/bin/wait-for-it
+COPY --from=builder /usr/src/app/wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x /usr/local/bin/wait-for-it
 
 # Cria o diretório de sessões e garante permissões para o usuário não-root
