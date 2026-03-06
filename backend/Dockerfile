@@ -42,7 +42,7 @@ ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY . .
 RUN npm run build
@@ -94,7 +94,7 @@ ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/package*.json ./
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
 COPY --from=builder /usr/src/app/wait-for-it.sh /usr/local/bin/wait-for-it
