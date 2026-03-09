@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "prepare": "husky",
+    "build": "npm run build -w backend",
     "lint": "eslint \"{backend,frontend}/**/*.ts*\" --cache --cache-location .eslintcache --fix",
     "format": "prettier --write \"{backend,frontend}/**/*.{ts,tsx,js,json,md}\"",
     "backend:dev": "npm run start:dev -w backend",

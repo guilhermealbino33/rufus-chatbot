@@ -1,7 +1,9 @@
-# Etapa de construção
+# =============================================================================
+# Stage 1: builder (context = backend/ no Railway)
+# =============================================================================
 FROM node:20-bookworm-slim AS builder
 
-# Dependências de sistema para Chromium (lista completa para Debian Bookworm)
+# Dependências de sistema para Chromium (WPPConnect/Puppeteer) – uma única camada
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
@@ -33,32 +35,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Evita download do Chromium pelo Puppeteer; usamos o do sistema
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-# Diretório padrão onde o WPPConnect armazenará os tokens de sessão
 ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
 
 WORKDIR /usr/src/app
 
+# Camada de dependências (melhor cache: só invalida se package*.json mudar)
 COPY package*.json ./
-COPY backend/package*.json ./backend/
-COPY frontend/package*.json ./frontend/
-
-# Install ALL deps (including devDependencies) so `nest build` / `@nestjs/cli` is available
 RUN npm ci --ignore-scripts
 
+# Código e build
 COPY . .
+RUN npm run build
 
-# Build the backend workspace
-RUN cd backend && npm run build
+# =============================================================================
+# Stage 2: produção (imagem final enxuta)
+# =============================================================================
+FROM node:20-bookworm-slim AS runner
 
-# Etapa de produção
-FROM node:20-bookworm-slim
-
-WORKDIR /usr/src/app
-
-# Dependências de sistema para Chromium (evita "Chromium not found" em produção)
+# Chromium em produção (mesma lista, sem libnss3-tools se não for necessário)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
@@ -75,7 +71,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
-    libnss3-tools \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libx11-xcb1 \
@@ -91,22 +86,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Evita download do Chromium pelo Puppeteer; usamos o do sistema
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
+ENV NODE_ENV=production
 
-# Copia apenas os arquivos necessários da etapa de construção da workspace do backend
-COPY --from=builder /usr/src/app/backend/dist ./dist
-COPY --from=builder /usr/src/app/backend/package*.json ./
+WORKDIR /usr/src/app
 
-RUN npm ci --omit=dev --ignore-scripts
+# Só artefatos de produção: dist + package.json (para npm ci --omit=dev)
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
 
-# Script de 'Wait-for-it' para garantir que o banco de dados esteja pronto
-COPY --from=builder /usr/src/app/backend/wait-for-it.sh /usr/local/bin/wait-for-it
+# Apenas dependências de produção (reduz tamanho da imagem)
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+COPY --from=builder /usr/src/app/wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x /usr/local/bin/wait-for-it
 
-# Cria o diretório de sessões e garante permissões para o usuário não-root
 RUN mkdir -p /usr/src/app/wpp-sessions && chown -R node:node /usr/src/app
 USER node
 
