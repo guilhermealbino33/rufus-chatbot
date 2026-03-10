@@ -25,9 +25,8 @@ async function runHealthCheck() {
   if (!fs.existsSync(executablePath)) {
     logger.error({
       severity: LogSeverity.ERROR,
-      message: `ERRO: Executável não encontrado em "${executablePath}"`,
+      message: `ERRO: Executável não encontrado em "${executablePath}. Defina a variável CHROMIUM_EXECUTABLE_PATH ou instale o Chromium."`,
     });
-    logger.error('Defina a variável CHROMIUM_EXECUTABLE_PATH ou instale o Chromium.');
     process.exit(1);
   }
   logger.log({
