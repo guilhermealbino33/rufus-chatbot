@@ -1,7 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppLoggerService } from './logger.service';
-import { ILogger } from '@/shared/interfaces/logger.interface';
+import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 
 @Injectable()
 export class SanityCheckService implements OnApplicationBootstrap {
@@ -15,7 +15,10 @@ export class SanityCheckService implements OnApplicationBootstrap {
   }
 
   onApplicationBootstrap() {
-    this.logger.log('[BOOT] Running Environment Sanity Check...');
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: '[BOOT] Running Environment Sanity Check...',
+    });
 
     const mandatoryKeys = [
       'NODE_ENV',
@@ -29,14 +32,23 @@ export class SanityCheckService implements OnApplicationBootstrap {
 
     const loadedKeys = mandatoryKeys.filter((key) => this.configService.get(key));
 
-    this.logger.log(`[SUCCESS] Loaded Keys: ${loadedKeys.join(', ')}`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `[SUCCESS] Loaded Keys: ${loadedKeys.join(', ')}`,
+    });
 
     const missingKeys = mandatoryKeys.filter((key) => !this.configService.get(key));
 
     if (missingKeys.length > 0) {
-      this.logger.warn(`[WARN] Missing Keys (using defaults if any): ${missingKeys.join(', ')}`);
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[WARN] Missing Keys (using defaults if any): ${missingKeys.join(', ')}`,
+      });
     }
 
-    this.logger.log('[SECURE] (Values are hidden for security)');
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: '[SECURE] (Values are hidden for security)',
+    });
   }
 }
