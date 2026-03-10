@@ -1,5 +1,6 @@
 # Dependencies (reinstalled in container)
 node_modules
+package-lock.json
 npm-debug.log*
 
 # Build output (rebuilt in container)

@@ -1,5 +1,5 @@
 # =============================================================================
-# Stage 1: builder (context = backend/ no Railway)
+# Stage 1: builder (context = raiz do monorepo, railway.json: "context": ".")
 # =============================================================================
 FROM node:20-bookworm-slim AS builder
 
@@ -43,18 +43,24 @@ WORKDIR /usr/src/app
 
 # Camada de dependências (melhor cache: só invalida se package*.json mudar)
 COPY package*.json ./
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
+
 RUN npm ci --ignore-scripts
 
-# Código e build
 COPY . .
-RUN npm run build
+
+# Build do backend
+RUN cd backend && npm run build
+
+# Remove devDependencies para reduzir tamanho da imagem de produção
+RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
 
 # =============================================================================
 # Stage 2: produção (imagem final enxuta)
 # =============================================================================
 FROM node:20-bookworm-slim AS runner
 
-# Chromium em produção (mesma lista, sem libnss3-tools se não for necessário)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
@@ -93,14 +99,11 @@ ENV NODE_ENV=production
 
 WORKDIR /usr/src/app
 
-# Só artefatos de produção: dist + package.json (para npm ci --omit=dev)
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/package*.json ./
+# Artefatos de produção: dist do backend + node_modules já podado
+COPY --from=builder /usr/src/app/backend/dist ./dist
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 
-# Apenas dependências de produção (reduz tamanho da imagem)
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-
-COPY --from=builder /usr/src/app/wait-for-it.sh /usr/local/bin/wait-for-it
+COPY --from=builder /usr/src/app/backend/wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x /usr/local/bin/wait-for-it
 
 RUN mkdir -p /usr/src/app/wpp-sessions && chown -R node:node /usr/src/app
