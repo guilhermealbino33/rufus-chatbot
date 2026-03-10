@@ -3,12 +3,11 @@ import { ChatbotService } from './chatbot.service';
 
 @Controller('webhook')
 export class ChatbotController {
-    constructor(private readonly chatbotService: ChatbotService) { }
+  constructor(private readonly chatbotService: ChatbotService) {}
 
-    @Post()
-    @HttpCode(HttpStatus.OK)
-    async handleWebhook(@Body() payload: any) {
-        return this.chatbotService.handleWebhook(payload);
-    }
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  async handleWebhook(@Body() payload: any) {
+    return this.chatbotService.handleWebhook(payload);
+  }
 }
-

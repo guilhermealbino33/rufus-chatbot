@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientConfig, DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
 import { BrowserAlreadyRunningException } from '../exceptions/browser-already-running.exception';
-import { whatsappConfig } from '@/crosscutting/config';
+import { whatsappConfig } from '@/crosscutting/config/namespaces';
 
 /**
  * Factory responsável pela criação de instâncias do WPPConnect
