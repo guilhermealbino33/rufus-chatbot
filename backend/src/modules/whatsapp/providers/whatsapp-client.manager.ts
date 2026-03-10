@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
+import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientFactory } from './whatsapp-client.factory';
 import { WhatsappClientConfig } from '../config/whatsapp-client.config';
@@ -18,11 +20,16 @@ import { WhatsappClientConfig } from '../config/whatsapp-client.config';
  */
 @Injectable()
 export class WhatsappClientManager implements OnModuleDestroy {
-  private readonly logger = new Logger(WhatsappClientManager.name);
+  private readonly logger: ILogger;
   private readonly clients = new Map<string, wppconnect.Whatsapp>();
   private readonly initializingClients = new Set<string>();
 
-  constructor(private readonly factory: WhatsappClientFactory) {}
+  constructor(
+    private readonly factory: WhatsappClientFactory,
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(WhatsappClientManager.name);
+  }
 
   /**
    * Obtém um cliente existente da memória
@@ -62,7 +69,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
    */
   private markAsInitializing(sessionName: string): void {
     this.initializingClients.add(sessionName);
-    this.logger.log(`Session ${sessionName} marked as initializing`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Session ${sessionName} marked as initializing`,
+    });
   }
 
   /**
@@ -72,7 +82,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
    */
   private unmarkAsInitializing(sessionName: string): void {
     this.initializingClients.delete(sessionName);
-    this.logger.log(`Session ${sessionName} unmarked from initializing`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Session ${sessionName} unmarked from initializing`,
+    });
   }
 
   /**
@@ -90,9 +103,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
   ): Promise<wppconnect.Whatsapp> {
     // Previne duplicação de instâncias
     if (this.clients.has(sessionName)) {
-      this.logger.warn(
-        `[WARNING] Client for ${sessionName} already exists. Returning existing instance.`,
-      );
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[WARNING] Client for ${sessionName} already exists. Returning existing instance.`,
+      });
       return this.clients.get(sessionName)!;
     }
 
@@ -110,7 +124,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
       // Armazena em memória
       this.clients.set(sessionName, client);
 
-      this.logger.log(`Client stored in memory for: ${sessionName} (Total: ${this.clients.size})`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Client stored in memory for: ${sessionName} (Total: ${this.clients.size})`,
+      });
 
       return client;
     } finally {
@@ -131,12 +148,18 @@ export class WhatsappClientManager implements OnModuleDestroy {
     const client = this.clients.get(sessionName);
 
     if (!client) {
-      this.logger.warn(`⚠️ No client found for ${sessionName} to remove`);
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[WARN] No client found for ${sessionName} to remove`,
+      });
       return;
     }
 
     try {
-      this.logger.log(`Closing client for: ${sessionName}...`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Closing client for: ${sessionName}...`,
+      });
 
       // Cria uma promise de timeout para não travar o shutdown
       const timeoutPromise = new Promise((_, reject) =>
@@ -146,16 +169,23 @@ export class WhatsappClientManager implements OnModuleDestroy {
       // Corrida entre o close() real e o timeout
       await Promise.race([client.close(), timeoutPromise]);
 
-      this.logger.log(`Client closed for: ${sessionName}`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Client closed for: ${sessionName}`,
+      });
     } catch (error) {
-      this.logger.error(`[WARNING] Error closing client for ${sessionName}:`, error.message);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `[WARNING] Error closing client for ${sessionName}: ${error.message}`,
+      });
       // Mesmo com erro, consideramos fechado para fins de limpeza
     } finally {
       // Remove da memória mesmo se o close falhar
       this.clients.delete(sessionName);
-      this.logger.log(
-        `Client removed from memory: ${sessionName} (Remaining: ${this.clients.size})`,
-      );
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Client removed from memory: ${sessionName} (Remaining: ${this.clients.size})`,
+      });
     }
   }
 
@@ -172,11 +202,17 @@ export class WhatsappClientManager implements OnModuleDestroy {
     const client = this.clients.get(sessionName);
 
     if (!client) {
-      this.logger.warn(`[WARNING] No client found for ${sessionName} to force close`);
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[WARNING] No client found for ${sessionName} to force close`,
+      });
       return;
     }
 
-    this.logger.warn(`[WARNING] Attempting force close for ${sessionName}...`);
+    this.logger.warn({
+      severity: LogSeverity.WARNING,
+      message: `[WARNING] Attempting force close for ${sessionName}...`,
+    });
 
     try {
       // Estratégia 1: Close normal com timeout curto (3s)
@@ -184,16 +220,26 @@ export class WhatsappClientManager implements OnModuleDestroy {
         client.close(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000)),
       ]);
-      this.logger.log(`Force close succeeded for ${sessionName}`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Force close succeeded for ${sessionName}`,
+      });
     } catch (error) {
-      this.logger.error(`[WARNING] Force close failed for ${sessionName}: ${error.message}`);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `[WARNING] Force close failed for ${sessionName}: ${error.message}`,
+      });
       // Estratégia 2: Apenas remove da memória e loga o problema
-      this.logger.warn(
-        `[WARNING] Client ${sessionName} may have orphaned browser process. Manual cleanup may be required.`,
-      );
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[WARNING] Client ${sessionName} may have orphaned browser process. Manual cleanup may be required.`,
+      });
     } finally {
       this.clients.delete(sessionName);
-      this.logger.log(`Client removed from memory: ${sessionName}`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Client removed from memory: ${sessionName}`,
+      });
     }
   }
 
@@ -212,7 +258,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
     try {
       return await client.isConnected();
     } catch (error) {
-      this.logger.error(`[WARNING] Error checking connection for ${sessionName}:`, error.message);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `[WARNING] Error checking connection for ${sessionName}: ${error.message}`,
+      });
       // Remove cliente morto da memória
       this.clients.delete(sessionName);
       return false;
@@ -232,10 +281,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
     try {
       return await client.getConnectionState();
     } catch (error) {
-      this.logger.error(
-        `[WARNING] Error getting connection state for ${sessionName}:`,
-        error.message,
-      );
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `[WARNING] Error getting connection state for ${sessionName}: ${error.message}`,
+      });
       return null;
     }
   }
@@ -251,11 +300,14 @@ export class WhatsappClientManager implements OnModuleDestroy {
     const totalClients = this.clients.size;
 
     if (totalClients === 0) {
-      this.logger.log('No active clients to close');
+      this.logger.log({ severity: LogSeverity.LOG, message: 'No active clients to close' });
       return;
     }
 
-    this.logger.log(`Closing all ${totalClients} active clients...`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Closing all ${totalClients} active clients...`,
+    });
 
     const closePromises = Array.from(this.clients.keys()).map((sessionName) =>
       this.removeClient(sessionName),
@@ -266,7 +318,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
     const failed = results.filter((r) => r.status === 'rejected').length;
     const success = results.filter((r) => r.status === 'fulfilled').length;
 
-    this.logger.log(`Cleanup completed: ${success} closed successfully, ${failed} failed`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Cleanup completed: ${success} closed successfully, ${failed} failed`,
+    });
   }
 
   /**
@@ -276,7 +331,10 @@ export class WhatsappClientManager implements OnModuleDestroy {
    * for encerrada, prevenindo processos órfãos do navegador.
    */
   async onModuleDestroy() {
-    this.logger.log('Module destroying - cleaning up all clients...');
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: 'Module destroying - cleaning up all clients...',
+    });
     await this.closeAll();
   }
 

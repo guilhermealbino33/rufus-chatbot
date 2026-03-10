@@ -3,10 +3,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { useContainer } from 'class-validator';
 import { AppModule } from './app.module';
+import { AppLoggerService } from './shared/services/logger.service';
 import { serverConfig } from './crosscutting/config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+  app.useLogger(app.get(AppLoggerService));
+  app.flushLogs();
 
   const srv = app.get<ConfigType<typeof serverConfig>>(serverConfig.KEY);
 

@@ -1,5 +1,6 @@
-import { LogSeverity, LoggerPayload } from '../../../shared/interfaces/logger.interface';
-import { Inject, Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { LogSeverity, LoggerPayload, ILogger } from '../../../shared/interfaces/logger.interface';
+import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
 import { ConfigType } from '@nestjs/config';
 import * as fs from 'fs';
 import * as wppconnect from '@wppconnect-team/wppconnect';
@@ -18,12 +19,15 @@ import { whatsappConfig } from '@/crosscutting/config/namespaces';
  */
 @Injectable()
 export class WhatsappClientFactory {
-  private readonly logger = new Logger(WhatsappClientFactory.name);
+  private readonly logger: ILogger;
 
   constructor(
     @Inject(whatsappConfig.KEY)
     private readonly whatsappCfg: ConfigType<typeof whatsappConfig>,
-  ) {}
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(WhatsappClientFactory.name);
+  }
 
   /**
    * Cria uma nova instância do cliente WPPConnect
