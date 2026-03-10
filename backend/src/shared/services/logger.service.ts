@@ -1,4 +1,4 @@
-import { Injectable, Logger, LoggerService } from '@nestjs/common';
+import { Injectable, ConsoleLogger, LoggerService } from '@nestjs/common';
 import { ILogger, LoggerPayload } from '@/shared/interfaces/logger.interface';
 
 function isLoggerPayload(payload: LoggerPayload | string): payload is LoggerPayload {
@@ -38,7 +38,7 @@ function formatPayload(payload: LoggerPayload): string {
 
 @Injectable()
 export class AppLoggerService implements LoggerService {
-  private readonly nestLogger = new Logger();
+  private readonly nestLogger = new ConsoleLogger();
 
   log(message: unknown, ...optionalParams: unknown[]): void;
   log(payload: LoggerPayload | string): void;
@@ -109,7 +109,7 @@ export class AppLoggerService implements LoggerService {
    * Preserves per-class context without breaking DI.
    */
   forContext(context: string): ILogger {
-    const boundLogger = new Logger(context);
+    const boundLogger = new ConsoleLogger(context);
     return {
       log: (payload: LoggerPayload | string) => {
         if (isLoggerPayload(payload)) {
