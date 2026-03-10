@@ -1,13 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import {
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  validateSync,
-  IsNotEmpty,
-  IsDefined,
-} from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
 
 enum Environment {
   Development = 'development',
@@ -25,35 +17,30 @@ class EnvironmentVariables {
   @IsOptional()
   PORT: number = 3000;
 
-  // DATABASE
-  @IsString()
-  @IsDefined({ message: '❌ MISSING_VAR: DATABASE_HOST' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: DATABASE_HOST' })
-  DATABASE_HOST: string = undefined as any;
-
-  @IsNumber()
-  @IsDefined({ message: '❌ MISSING_VAR: DATABASE_PORT' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: DATABASE_PORT' })
-  DATABASE_PORT: number = undefined as any;
-
-  @IsString()
-  @IsDefined({ message: '❌ MISSING_VAR: DATABASE_USERNAME' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: DATABASE_USERNAME' })
-  DATABASE_USERNAME: string = undefined as any;
-
-  @IsString()
-  @IsDefined({ message: '❌ MISSING_VAR: DATABASE_PASSWORD' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: DATABASE_PASSWORD' })
-  DATABASE_PASSWORD: string = undefined as any;
-
-  @IsString()
-  @IsDefined({ message: '❌ MISSING_VAR: DATABASE_NAME' })
-  @IsNotEmpty({ message: '❌ EMPTY_VAR: DATABASE_NAME' })
-  DATABASE_NAME: string = undefined as any;
-
+  // DATABASE (either DATABASE_URL or all individual vars required)
   @IsString()
   @IsOptional()
   DATABASE_URL: string;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_HOST: string;
+
+  @IsNumber()
+  @IsOptional()
+  DATABASE_PORT: number;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_USERNAME: string;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_PASSWORD: string;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_NAME: string;
 
   // WHATSAPP
   @IsString()
@@ -83,5 +70,20 @@ export function validate(config: Record<string, any>) {
       .join('\n');
     throw new Error(`\nStrict Environment Validation Failed:\n${errorMessages}\n`);
   }
+
+  const hasUrl = !!validatedConfig.DATABASE_URL;
+  const hasIndividual =
+    !!validatedConfig.DATABASE_HOST &&
+    validatedConfig.DATABASE_PORT != null &&
+    !!validatedConfig.DATABASE_USERNAME &&
+    !!validatedConfig.DATABASE_PASSWORD &&
+    !!validatedConfig.DATABASE_NAME;
+
+  if (!hasUrl && !hasIndividual) {
+    throw new Error(
+      '\nDatabase config: provide DATABASE_URL or all individual vars (DATABASE_HOST, DATABASE_PORT, DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_NAME)\n',
+    );
+  }
+
   return validatedConfig;
 }
