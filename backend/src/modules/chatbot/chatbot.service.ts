@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { AppLoggerService } from '@/shared/services/logger.service';
-import { ILogger } from '@/shared/interfaces/logger.interface';
+import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { WebhookService } from '../../shared/services/webhook.service';
 import {
   IncomingWhatsappMessage,
@@ -32,21 +32,28 @@ export class ChatbotService implements OnModuleInit {
     this.webhookService.onMessageReceived(async (msg: IncomingWhatsappMessage) => {
       await this.handleIncomingMessage(msg);
     });
-    this.logger.log('[SUCCESS] Subscribed to message.received events');
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: '[SUCCESS] Subscribed to message.received events',
+    });
   }
 
   /**
    * Handles incoming messages from any channel (currently WhatsApp only)
    */
   private async handleIncomingMessage(msg: IncomingWhatsappMessage): Promise<void> {
-    this.logger.log(`Processing message from ${msg.from} in session ${msg.sessionId}`);
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Processing message from ${msg.from} in session ${msg.sessionId}`,
+    });
 
     // Extract phone number from remote JID (e.g. 5511999999999@c.us -> 5511999999999)
     const phone = msg.from.replace(/\D/g, '');
 
-    this.logger.debug(
-      `[${msg.sessionId}] Extracted phone for session: ${phone} (original JID: ${msg.from})`,
-    );
+    this.logger.debug({
+      severity: LogSeverity.DEBUG,
+      message: `[${msg.sessionId}] Extracted phone for session: ${phone} (original JID: ${msg.from})`,
+    });
 
     const response = await this.processMessage(msg.sessionId, phone, msg.body);
 
@@ -59,7 +66,10 @@ export class ChatbotService implements OnModuleInit {
         body: response,
       };
 
-      this.logger.debug(`[${msg.sessionId}] Emitting response to: ${outgoingMessage.to}`);
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${msg.sessionId}] Emitting response to: ${outgoingMessage.to}`,
+      });
 
       this.webhookService.emitMessageSend(outgoingMessage);
     }
@@ -92,7 +102,10 @@ export class ChatbotService implements OnModuleInit {
     const currentNode = FUNNEL_TREE[initialStep];
 
     if (!currentNode) {
-      this.logger.error(`Node ${initialStep} not found in FUNNEL_TREE. Resetting to START.`);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Node ${initialStep} not found in FUNNEL_TREE. Resetting to START.`,
+      });
       await this.chatbotUserService.updateState(user.id, ChatbotState.START);
       return FUNNEL_TREE[ChatbotState.START].message;
     }
@@ -132,14 +145,17 @@ export class ChatbotService implements OnModuleInit {
     const nextNode = FUNNEL_TREE[nextNodeId];
 
     if (!nextNode) {
-      this.logger.error(`Next Node ${nextNodeId} not found. Staying at ${initialStep}.`);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Next Node ${nextNodeId} not found. Staying at ${initialStep}.`,
+      });
       return `Erro interno. Opção configurada incorretamente.`;
     }
 
     // 4. Handle Actions (HANDOFF, CLOSE)
     let finalStep = nextNodeId;
     if (nextNode.action === FlowAction.HANDOFF) {
-      this.logger.log(`Performing HANDOFF for ${phone}`);
+      this.logger.log({ severity: LogSeverity.LOG, message: `Performing HANDOFF for ${phone}` });
       finalStep = ChatbotState.HANDOFF_ACTIVE; // Special state to block bot
       actionType = FlowAction.HANDOFF;
     } else if (nextNode.action === FlowAction.CLOSE) {
@@ -181,7 +197,11 @@ export class ChatbotService implements OnModuleInit {
       });
       await this.flowLogRepository.save(log);
     } catch (e) {
-      this.logger.error(`Failed to log flow transition: ${e.message}`, e.stack);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Failed to log flow transition: ${e.message}`,
+        stack: e.stack,
+      });
     }
   }
 
@@ -190,9 +210,10 @@ export class ChatbotService implements OnModuleInit {
    * @deprecated
    */
   async handleWebhook(payload: any) {
-    this.logger.warn(
-      '[DEPRECATED] handleWebhook is deprecated. Use event-driven architecture instead.',
-    );
+    this.logger.warn({
+      severity: LogSeverity.WARNING,
+      message: '[DEPRECATED] handleWebhook is deprecated. Use event-driven architecture instead.',
+    });
     // Simple compatibility layer
     const sessionName = payload.session || 'default';
     const message = payload.type === 'message' ? payload.message : null;

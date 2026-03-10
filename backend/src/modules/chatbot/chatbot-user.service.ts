@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppLoggerService } from '@/shared/services/logger.service';
-import { ILogger } from '@/shared/interfaces/logger.interface';
+import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatbotUser } from './entities/chatbot-user.entity';
@@ -26,7 +26,10 @@ export class ChatbotUserService {
     let user = await this.chatbotUserRepository.findOne({ where: { phoneNumber } });
 
     if (!user) {
-      this.logger.log(`Creating new ChatbotUser for ${phoneNumber}`);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `Creating new ChatbotUser for ${phoneNumber}`,
+      });
       user = this.chatbotUserRepository.create({
         phoneNumber,
         name,
