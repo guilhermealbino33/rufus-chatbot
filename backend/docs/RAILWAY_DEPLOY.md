@@ -63,7 +63,7 @@ Deploy a partir da pasta `backend`:
 
 ```bash
 cd backend
-railway up
+railway up --config ../.railway/workflows/deploy.yml
 ```
 
 Ou conectar o repositório GitHub ao Railway e configurar o build para a pasta `backend` com Dockerfile.

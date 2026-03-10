@@ -1,3 +1,6 @@
+TEMPORARILY DISABLED - CI/CD via GitHub Actions is not active.
+Deployment is handled directly through Railway.
+
 name: CI/CD Pipeline
 
 on:
@@ -42,7 +45,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up --service rufus-chatbot-api -d
+        run: railway up --service rufus-chatbot-api -d --config ../.railway/workflows/deploy.yml
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: ./backend
