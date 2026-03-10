@@ -7,7 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { AppLoggerService } from '@/shared/services/logger.service';
-import { ILogger } from '@/shared/interfaces/logger.interface';
+import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { SendMessageDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';
@@ -31,7 +31,10 @@ export class WhatsappMessagesService implements OnModuleInit {
     this.webhookService.onMessageSend(async (msg: OutgoingWhatsappMessage) => {
       await this.handleOutgoingMessage(msg);
     });
-    this.logger.log('[SUCCESS] Subscribed to message.send events');
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: '[SUCCESS] Subscribed to message.send events',
+    });
   }
 
   /**
@@ -39,7 +42,10 @@ export class WhatsappMessagesService implements OnModuleInit {
    */
   private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
     try {
-      this.logger.debug(`[${msg.sessionId}] Handling outgoing message to: ${msg.to}`);
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${msg.sessionId}] Handling outgoing message to: ${msg.to}`,
+      });
 
       await this.send({
         sessionName: msg.sessionId,
@@ -47,7 +53,10 @@ export class WhatsappMessagesService implements OnModuleInit {
         message: msg.body,
       });
     } catch (error) {
-      this.logger.error(`Failed to send message via event to ${msg.to}:`, error.message);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Failed to send message via event to ${msg.to}: ${error.message}`,
+      });
     }
   }
 
@@ -77,14 +86,18 @@ export class WhatsappMessagesService implements OnModuleInit {
         throw new BadRequestException(`Invalid phone number format: ${phone}`);
       }
 
-      this.logger.debug(`[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`);
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`,
+      });
 
       // For @lid identifiers, we send directly without checkNumberStatus
       // because LIDs are already validated identifiers from incoming messages
       if (isLidJid(normalizedJid)) {
-        this.logger.debug(
-          `[${sessionName}] Detected LID format, sending directly to: ${normalizedJid}`,
-        );
+        this.logger.debug({
+          severity: LogSeverity.DEBUG,
+          message: `[${sessionName}] Detected LID format, sending directly to: ${normalizedJid}`,
+        });
 
         const result = await client.sendText(normalizedJid, message);
 
@@ -96,7 +109,10 @@ export class WhatsappMessagesService implements OnModuleInit {
       }
 
       // For @c.us identifiers, validate with checkNumberStatus first
-      this.logger.debug(`[${sessionName}] Validating number status for: ${normalizedJid}`);
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] Validating number status for: ${normalizedJid}`,
+      });
 
       const resultCheck = await client.checkNumberStatus(normalizedJid);
 
@@ -107,7 +123,10 @@ export class WhatsappMessagesService implements OnModuleInit {
       // Use the ID returned by checkNumberStatus if available, otherwise use normalized JID
       const targetJid = resultCheck.id?._serialized || normalizedJid;
 
-      this.logger.debug(`[${sessionName}] Sending message to: ${targetJid}`);
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] Sending message to: ${targetJid}`,
+      });
 
       const result = await client.sendText(targetJid, message);
 
@@ -117,7 +136,11 @@ export class WhatsappMessagesService implements OnModuleInit {
         data: result,
       };
     } catch (error) {
-      this.logger.error(`Error sending message in ${sessionName}:`, error);
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Error sending message in ${sessionName}: ${error?.message ?? error}`,
+        error,
+      });
 
       if (error instanceof HttpException) {
         throw error;
