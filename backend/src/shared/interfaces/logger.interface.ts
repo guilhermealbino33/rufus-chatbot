@@ -42,4 +42,17 @@ export interface LoggerPayload {
    * Qualquer outro dado livre que ajude a debugar sem precisar concatenar na string da `message`
    */
   metadata?: Record<string, any>;
+
+  /**
+   * Identificador da mensagem (ex: ID da mensagem do WhatsApp)
+   */
+  messageId?: string;
+}
+
+export interface ILogger {
+  log(payload: LoggerPayload | string): void;
+  error(payload: LoggerPayload | string, trace?: string): void;
+  warn(payload: LoggerPayload | string): void;
+  debug(payload: LoggerPayload | string): void;
+  verbose(payload: LoggerPayload | string): void;
 }
