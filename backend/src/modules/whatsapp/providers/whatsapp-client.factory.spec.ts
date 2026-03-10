@@ -29,6 +29,10 @@ describe('WhatsappClientFactory', () => {
     const sessionName = 'test-session';
     const config = { sessionName };
 
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
     it('should call wppconnect.create with correct options', async () => {
       const { sut } = makeSut();
       const mockClient = { session: sessionName } as any;
@@ -82,9 +86,14 @@ describe('WhatsappClientFactory', () => {
       expect(wppconnect.create).toHaveBeenCalledWith(
         expect.objectContaining({
           catchQR: onQRCode,
-          statusFind: onStatusChange,
+          statusFind: expect.any(Function),
         }),
       );
+
+      // Verify that calling the statusFind wrapper triggers the callback
+      const options = (wppconnect.create as jest.Mock).mock.calls[0][0];
+      options.statusFind('some-status', 'some-session');
+      expect(onStatusChange).toHaveBeenCalledWith('some-status', 'some-session');
     });
 
     it('should throw InternalServerErrorException if wppconnect.create fails', async () => {
