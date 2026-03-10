@@ -21,6 +21,8 @@ import { AppDataSource } from './crosscutting/database/data-source';
     TypeOrmModule.forRoot({
       ...AppDataSource.options,
       autoLoadEntities: true,
+      retryAttempts: 10,
+      retryDelay: 3000,
     }),
 
     AuthModule,

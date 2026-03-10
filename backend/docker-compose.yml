@@ -14,7 +14,8 @@ services:
       # Aponta para o volume persistido dentro do container
       - WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     # CRÍTICO: Chromium precisa de pelo menos 256 MB de memória compartilhada.
     # Sem isso, o processo trava silenciosamente com ENOMEM no /dev/shm.
     shm_size: '256mb'
@@ -28,6 +29,11 @@ services:
 
   db:
     image: postgres:13
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d dbname"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
