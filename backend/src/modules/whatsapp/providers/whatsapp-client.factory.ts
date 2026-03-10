@@ -1,3 +1,4 @@
+import { LogSeverity, LoggerPayload } from '../../../shared/interfaces/logger.interface';
 import { Inject, Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import * as fs from 'fs';
@@ -33,7 +34,7 @@ export class WhatsappClientFactory {
    */
   async create(config: WhatsappClientConfig): Promise<wppconnect.Whatsapp> {
     this.logger.log({
-      severity: 'LOG',
+      severity: LogSeverity.LOG,
       message: `Criando WPPConnect client para sessão: ${config.sessionName}`,
     });
 
@@ -41,11 +42,11 @@ export class WhatsappClientFactory {
 
     // [DIAG] Pré-diagnóstico do ambiente antes de lançar o Chromium
     this.logger.log({
-      severity: 'LOG',
+      severity: LogSeverity.LOG,
       message: `[DIAG] wppconnect.create() PRE-LAUNCH | session=${config.sessionName} | executablePath=${executablePath ?? 'auto-detect'} | hasPhoneNumber=${!!config.phoneNumber}`,
     });
     this.logger.log({
-      severity: 'LOG',
+      severity: LogSeverity.LOG,
       message: `[DIAG] Browser config | headless=${DEFAULT_WHATSAPP_CONFIG.headless} | useChrome=${DEFAULT_WHATSAPP_CONFIG.useChrome} | browserArgs.count=${DEFAULT_WHATSAPP_CONFIG.browserArgs?.length ?? 0}`,
     });
 
@@ -55,12 +56,12 @@ export class WhatsappClientFactory {
     if (executablePath) {
       if (fs.existsSync(executablePath)) {
         this.logger.log({
-          severity: 'LOG',
+          severity: LogSeverity.LOG,
           message: `[DIAG] executablePath validado: ${executablePath}`,
         });
       } else {
         this.logger.error({
-          severity: 'ERROR',
+          severity: LogSeverity.ERROR,
           message:
             `[DIAG] executablePath NÃO ENCONTRADO: ${executablePath}. ` +
             `O Puppeteer vai usar auto-detect e pode baixar o Chrome errado! ` +
@@ -69,7 +70,7 @@ export class WhatsappClientFactory {
       }
     } else {
       this.logger.warn({
-        severity: 'WARNING',
+        severity: LogSeverity.WARNING,
         message:
           `[DIAG] executablePath não configurado. ` +
           `Defina CHROMIUM_EXECUTABLE_PATH nas variáveis de ambiente do Railway.`,
@@ -78,12 +79,12 @@ export class WhatsappClientFactory {
 
     try {
       this.logger.log({
-        severity: 'LOG',
+        severity: LogSeverity.LOG,
         message: `[DIAG] Lançando Chromium para sessão=${config.sessionName}...`,
       });
       const client = await wppconnect.create(options);
       this.logger.log({
-        severity: 'LOG',
+        severity: LogSeverity.LOG,
         message: `[DIAG] wppconnect.create() retornou (login completo) para sessão=${config.sessionName}`,
       });
       return client;
@@ -91,7 +92,7 @@ export class WhatsappClientFactory {
       // [DIAG] Stack trace completo — expõe falhas silenciosas do Puppeteer/Chromium
       this.logger.error(
         {
-          severity: 'ERROR',
+          severity: LogSeverity.ERROR,
           message: `[DIAG] wppconnect.create() THREW for session=${config.sessionName}: ${error.message}`,
         },
         error.stack,
@@ -156,7 +157,7 @@ export class WhatsappClientFactory {
     if (config.onStatusChange) {
       options.statusFind = (status, session) => {
         this.logger.log({
-          severity: 'LOG',
+          severity: LogSeverity.LOG,
           message: `[STATUS] [statusFind] session=${session} status=${status}`,
         });
         config.onStatusChange!(status, session);
@@ -165,7 +166,7 @@ export class WhatsappClientFactory {
       // Fallback: mesmo sem callback externo, loga o status para debug em produção
       options.statusFind = (status, session) => {
         this.logger.log({
-          severity: 'LOG',
+          severity: LogSeverity.LOG,
           message: `[STATUS] [statusFind] session=${session} status=${status}`,
         });
       };
