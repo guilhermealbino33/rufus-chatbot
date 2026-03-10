@@ -1,12 +1,13 @@
 import {
   Injectable,
-  Logger,
   NotFoundException,
   InternalServerErrorException,
   HttpException,
   BadRequestException,
   OnModuleInit,
 } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
+import { ILogger } from '@/shared/interfaces/logger.interface';
 import { SendMessageDTO } from '../dto';
 import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';
@@ -15,19 +16,22 @@ import { ApiResponse } from '../interfaces/whatsapp-common.interface';
 
 @Injectable()
 export class WhatsappMessagesService implements OnModuleInit {
-  private readonly logger = new Logger(WhatsappMessagesService.name);
+  private readonly logger: ILogger;
 
   constructor(
     private clientManager: WhatsappClientManager,
     private webhookService: WebhookService,
-  ) {}
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(WhatsappMessagesService.name);
+  }
 
   onModuleInit() {
     // Subscribe to outgoing message events via WebhookService
     this.webhookService.onMessageSend(async (msg: OutgoingWhatsappMessage) => {
       await this.handleOutgoingMessage(msg);
     });
-    this.logger.log('✅ Subscribed to message.send events');
+    this.logger.log('[SUCCESS] Subscribed to message.send events');
   }
 
   /**

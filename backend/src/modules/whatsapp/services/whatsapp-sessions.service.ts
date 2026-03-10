@@ -1,7 +1,7 @@
-import { LogSeverity, LoggerPayload } from '../../../shared/interfaces/logger.interface';
+import { LogSeverity, LoggerPayload, ILogger } from '../../../shared/interfaces/logger.interface';
+import { AppLoggerService } from '@/shared/services/logger.service';
 import {
   Injectable,
-  Logger,
   NotFoundException,
   RequestTimeoutException,
   InternalServerErrorException,
@@ -28,14 +28,17 @@ import { Message as WPPConnectMessage } from '@wppconnect-team/wppconnect';
 
 @Injectable()
 export class WhatsappSessionsService {
-  private readonly logger = new Logger(WhatsappSessionsService.name);
+  private readonly logger: ILogger;
 
   constructor(
     @InjectRepository(WhatsappSession)
     private sessionRepository: Repository<WhatsappSession>,
     private clientManager: WhatsappClientManager,
     private webhookService: WebhookService,
-  ) {}
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(WhatsappSessionsService.name);
+  }
 
   async start({
     sessionName,

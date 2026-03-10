@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
+import { ILogger } from '@/shared/interfaces/logger.interface';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { WhatsappClientFactory } from './whatsapp-client.factory';
 import { WhatsappClientConfig } from '../config/whatsapp-client.config';
@@ -18,11 +20,16 @@ import { WhatsappClientConfig } from '../config/whatsapp-client.config';
  */
 @Injectable()
 export class WhatsappClientManager implements OnModuleDestroy {
-  private readonly logger = new Logger(WhatsappClientManager.name);
+  private readonly logger: ILogger;
   private readonly clients = new Map<string, wppconnect.Whatsapp>();
   private readonly initializingClients = new Set<string>();
 
-  constructor(private readonly factory: WhatsappClientFactory) {}
+  constructor(
+    private readonly factory: WhatsappClientFactory,
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(WhatsappClientManager.name);
+  }
 
   /**
    * Obtém um cliente existente da memória
@@ -131,7 +138,7 @@ export class WhatsappClientManager implements OnModuleDestroy {
     const client = this.clients.get(sessionName);
 
     if (!client) {
-      this.logger.warn(`⚠️ No client found for ${sessionName} to remove`);
+      this.logger.warn(`[WARN] No client found for ${sessionName} to remove`);
       return;
     }
 
