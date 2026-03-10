@@ -4,6 +4,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CrosscuttingConfigModule } from './crosscutting/config';
 import { AuthModule } from './modules/auth';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { HealthModule } from './modules/health';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { WebhookService } from './shared/services/webhook.service';
@@ -22,6 +23,7 @@ import { AppDataSource } from './crosscutting/database/data-source';
 
     AuthModule,
     ChatbotModule,
+    HealthModule,
     UsersModule,
     WhatsappModule,
     SharedModule,

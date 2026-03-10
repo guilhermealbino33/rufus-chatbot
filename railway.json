@@ -6,7 +6,8 @@
     "context": "."
   },
   "deploy": {
-    "healthcheckPath": "/api/users",
+    "startCommand": "node dist/main",
+    "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

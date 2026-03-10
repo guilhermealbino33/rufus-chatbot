@@ -99,16 +99,14 @@ ENV NODE_ENV=production
 
 WORKDIR /usr/src/app
 
-# Artefatos de produção: dist do backend + node_modules já podado
+# Artefatos de produção: dist do backend + package.json + node_modules já podado
 COPY --from=builder /usr/src/app/backend/dist ./dist
+COPY --from=builder /usr/src/app/backend/package.json ./package.json
 COPY --from=builder /usr/src/app/node_modules ./node_modules
-
-COPY --from=builder /usr/src/app/backend/wait-for-it.sh /usr/local/bin/wait-for-it
-RUN chmod +x /usr/local/bin/wait-for-it
 
 RUN mkdir -p /usr/src/app/wpp-sessions && chown -R node:node /usr/src/app
 USER node
 
 EXPOSE 3000
 
-CMD ["wait-for-it", "db:5432", "--", "node", "dist/main"]
+CMD ["node", "dist/main"]
