@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
+import { ILogger } from '@/shared/interfaces/logger.interface';
 import { WebhookService } from '../../shared/services/webhook.service';
 import {
   IncomingWhatsappMessage,
@@ -13,21 +15,24 @@ import { ChatbotState, FlowAction } from './enums';
 
 @Injectable()
 export class ChatbotService implements OnModuleInit {
-  private readonly logger = new Logger(ChatbotService.name);
+  private readonly logger: ILogger;
 
   constructor(
     private readonly webhookService: WebhookService,
     private readonly chatbotUserService: ChatbotUserService,
     @InjectRepository(FlowLog)
     private readonly flowLogRepository: Repository<FlowLog>,
-  ) {}
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(ChatbotService.name);
+  }
 
   onModuleInit() {
     // Subscribe to incoming messages via WebhookService
     this.webhookService.onMessageReceived(async (msg: IncomingWhatsappMessage) => {
       await this.handleIncomingMessage(msg);
     });
-    this.logger.log('✅ Subscribed to message.received events');
+    this.logger.log('[SUCCESS] Subscribed to message.received events');
   }
 
   /**
@@ -185,7 +190,9 @@ export class ChatbotService implements OnModuleInit {
    * @deprecated
    */
   async handleWebhook(payload: any) {
-    this.logger.warn('⚠️ handleWebhook is deprecated. Use event-driven architecture instead.');
+    this.logger.warn(
+      '[DEPRECATED] handleWebhook is deprecated. Use event-driven architecture instead.',
+    );
     // Simple compatibility layer
     const sessionName = payload.session || 'default';
     const message = payload.type === 'message' ? payload.message : null;

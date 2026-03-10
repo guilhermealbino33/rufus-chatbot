@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppLoggerService } from '@/shared/services/logger.service';
+import { ILogger } from '@/shared/interfaces/logger.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatbotUser } from './entities/chatbot-user.entity';
@@ -6,12 +8,15 @@ import { ChatbotState } from './enums/chatbot-state.enum';
 
 @Injectable()
 export class ChatbotUserService {
-  private readonly logger = new Logger(ChatbotUserService.name);
+  private readonly logger: ILogger;
 
   constructor(
     @InjectRepository(ChatbotUser)
     private readonly chatbotUserRepository: Repository<ChatbotUser>,
-  ) {}
+    private readonly loggerService: AppLoggerService,
+  ) {
+    this.logger = loggerService.forContext(ChatbotUserService.name);
+  }
 
   /**
    * Retrieves an existing user by phone number or creates a new one.
