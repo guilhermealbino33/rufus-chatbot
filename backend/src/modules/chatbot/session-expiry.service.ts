@@ -86,7 +86,7 @@ export class SessionExpiryService {
     const log = await this.flowLogRepository
       .createQueryBuilder('log')
       .where('log.userPhone = :userPhone', { userPhone: userPhone.replace(/\D/g, '') })
-      .orderBy('log.created_at', 'DESC')
+      .orderBy('log.createdAt', 'DESC')
       .limit(1)
       .getOne();
 
