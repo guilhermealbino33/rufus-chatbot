@@ -170,5 +170,34 @@ describe('WhatsappMessagesService', () => {
       expect(mockClient.sendText).toHaveBeenNthCalledWith(2, resolvedJid, 'hello fallback');
       expect(result.success).toBe(true);
     });
+
+    it('should fallback to getPnLidEntry when getContact returns LID', async () => {
+      const { sut, clientManager } = makeSut();
+
+      const sessionName = 'lid-pnlid-session';
+      const lidJid = '257431800180973@lid';
+      const phoneJid = '5511999998888@c.us';
+
+      const mockClient = {
+        sendText: jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Invalid WID'))
+          .mockResolvedValueOnce({ msgId: 'pnlid-123' }),
+        getContact: jest.fn().mockResolvedValue({ id: { _serialized: lidJid } }),
+        getPnLidEntry: jest.fn().mockResolvedValue({
+          phoneNumber: { _serialized: phoneJid },
+        }),
+      };
+      clientManager.getClient.mockReturnValue(mockClient as any);
+
+      const result = await sut.send({ sessionName, phone: lidJid, message: 'hello pnlid' });
+
+      expect(mockClient.sendText).toHaveBeenCalledTimes(2);
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(1, lidJid, 'hello pnlid');
+      expect(mockClient.getContact).toHaveBeenCalledWith(lidJid);
+      expect(mockClient.getPnLidEntry).toHaveBeenCalledWith(lidJid);
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, phoneJid, 'hello pnlid');
+      expect(result.success).toBe(true);
+    });
   });
 });
