@@ -5,6 +5,7 @@ import { FlowLog } from '../entities/flow-log.entity';
 import { ChatbotState } from '../enums';
 import { Repository } from 'typeorm';
 import { ChatbotUser } from '../entities/chatbot-user.entity';
+import { AppLoggerService } from '@/shared/services/logger.service';
 
 interface makeSutTypes {
   service: ChatbotService;
@@ -28,7 +29,16 @@ const makeSut = async (): Promise<makeSutTypes> => {
     emitMessageSend: jest.fn(),
   } as unknown as WebhookService;
 
-  const sut = new ChatbotService(webhookService, chatbotUserService, flowLogRepository);
+  const loggerService = {
+    forContext: jest.fn().mockReturnThis(),
+  } as unknown as AppLoggerService;
+
+  const sut = new ChatbotService(
+    webhookService,
+    chatbotUserService,
+    flowLogRepository,
+    loggerService,
+  );
 
   return {
     service: sut,

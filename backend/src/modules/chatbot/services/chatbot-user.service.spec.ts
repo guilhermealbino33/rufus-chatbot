@@ -2,6 +2,7 @@ import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
 import { ChatbotUser } from '../entities/chatbot-user.entity';
 import { ChatbotState } from '../enums/chatbot-state.enum';
+import { AppLoggerService } from '@/shared/services/logger.service';
 
 interface MakeSutTypes {
   service: ChatbotUserService;
@@ -16,7 +17,15 @@ const makeSut = async (): Promise<MakeSutTypes> => {
     save: jest.fn().mockImplementation((user) => Promise.resolve(user as ChatbotUser)),
   } as unknown as Repository<ChatbotUser>;
 
-  const sut = new ChatbotUserService(mockRepository);
+  const loggerService = {
+    log: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    forContext: jest.fn().mockReturnThis(),
+  } as unknown as AppLoggerService;
+
+  const sut = new ChatbotUserService(mockRepository, loggerService);
 
   return {
     service: sut,
