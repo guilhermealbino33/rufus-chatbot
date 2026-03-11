@@ -66,4 +66,17 @@ export class ChatbotUserService {
 
     return this.chatbotUserRepository.save(user);
   }
+
+  /**
+   * Finds users inactive beyond the given threshold, excluding START and HANDOFF_ACTIVE.
+   * Used by the session expiry cron to clear stale conversations.
+   */
+  async findInactiveUsers(before: Date): Promise<ChatbotUser[]> {
+    return this.chatbotUserRepository
+      .createQueryBuilder('user')
+      .where('user.currentStep != :start', { start: ChatbotState.START })
+      .andWhere('user.currentStep != :handoff', { handoff: ChatbotState.HANDOFF_ACTIVE })
+      .andWhere('user.lastInteractionAt < :before', { before })
+      .getMany();
+  }
 }

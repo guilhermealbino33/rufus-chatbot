@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
 import { FlowLog } from './entities/flow-log.entity';
-import { FUNNEL_TREE } from './funnel.config';
+import { FUNNEL_TREE, getMainMenuMessage } from './funnel.config';
 import { ChatbotState, FlowAction } from './enums';
 
 @Injectable()
@@ -93,8 +93,10 @@ export class ChatbotService implements OnModuleInit {
     // If you want to allow "reset", check for a keyword like #RESET
     if (initialStep === ChatbotState.HANDOFF_ACTIVE) {
       if (body.trim().toUpperCase() === '#VOLTAR') {
-        await this.chatbotUserService.updateState(user.id, ChatbotState.START);
-        return FUNNEL_TREE[ChatbotState.START].message;
+        await this.chatbotUserService.updateState(user.id, ChatbotState.START, {
+          lastSessionId: sessionId,
+        });
+        return getMainMenuMessage();
       }
       return null; // Silently ignore to let human agent handle
     }
@@ -106,12 +108,15 @@ export class ChatbotService implements OnModuleInit {
         severity: LogSeverity.ERROR,
         message: `Node ${initialStep} not found in FUNNEL_TREE. Resetting to START.`,
       });
-      await this.chatbotUserService.updateState(user.id, ChatbotState.START);
-      return FUNNEL_TREE[ChatbotState.START].message;
+      await this.chatbotUserService.updateState(user.id, ChatbotState.START, {
+        lastSessionId: sessionId,
+      });
+      return getMainMenuMessage();
     }
 
-    // 2. Validate Input against Current Node Options
-    const cleanInput = body.trim();
+    // 2. Normalize input (e.g. "Sair" -> "0") and validate against Current Node Options
+    const rawInput = body.trim();
+    const cleanInput = rawInput.toLowerCase() === 'sair' ? '0' : rawInput;
     let nextNodeId: string | null = null;
     let actionType = FlowAction.USER_MESSAGE;
 
@@ -119,14 +124,15 @@ export class ChatbotService implements OnModuleInit {
       nextNodeId = currentNode.options[cleanInput];
     } else {
       // Input match failed
-      // Check if we stay in the same node or go to fallback
-      // If we are just starting, maybe we should just send the menu without error?
-      // For now, simple fallback logic:
       const fallbackId = currentNode.fallbackNodeId || initialStep;
 
-      // If staying on same node, it's an invalid input
+      // If staying on same node, it's an invalid input (or greeting at START)
       if (fallbackId === initialStep) {
-        // Log the "invalid input" event but don't change state
+        // At START: any unrecognized input is a valid greeting trigger - show menu without error
+        if (initialStep === ChatbotState.START) {
+          return getMainMenuMessage();
+        }
+        // Other menus: empathetic fallback + re-show options
         await this.logFlow(
           sessionId,
           phone,
@@ -135,7 +141,7 @@ export class ChatbotService implements OnModuleInit {
           FlowAction.INVALID_INPUT,
           body,
         );
-        return `Opção inválida. \n\n${currentNode.message}`;
+        return `Opa, não consegui entender "${cleanInput}".\n\n${currentNode.message}`;
       }
 
       nextNodeId = fallbackId;
@@ -166,8 +172,10 @@ export class ChatbotService implements OnModuleInit {
       actionType = FlowAction.CLOSE;
     }
 
-    // 5. Update User State
-    await this.chatbotUserService.updateState(user.id, finalStep);
+    // 5. Update User State (include lastSessionId for session-expiry lookups)
+    await this.chatbotUserService.updateState(user.id, finalStep, {
+      lastSessionId: sessionId,
+    });
 
     // 6. Log Transition
     await this.logFlow(sessionId, phone, initialStep, finalStep, actionType, body);
