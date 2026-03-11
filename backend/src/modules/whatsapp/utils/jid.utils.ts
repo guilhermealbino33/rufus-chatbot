@@ -83,6 +83,20 @@ export function isLidJid(jid: string): boolean {
 }
 
 /**
+ * Verifica se um JID é formato @c.us (contact), usável para envio.
+ *
+ * @param jid - JID completo
+ * @returns true se for @c.us, false caso contrário
+ *
+ * @example
+ * isUsJid('5548991426316@c.us') // true
+ * isUsJid('257431800180973@lid') // false
+ */
+export function isUsJid(jid: string): boolean {
+  return jid?.endsWith('@c.us') ?? false;
+}
+
+/**
  * Extrai número de telefone de um formattedName (ex: "+55 48 9142-6316")
  *
  * @param formattedName - Nome formatado contendo número de telefone

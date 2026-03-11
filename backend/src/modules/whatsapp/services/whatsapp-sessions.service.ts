@@ -25,6 +25,7 @@ import {
   WhatsappSessionStartResponse,
 } from '../interfaces/whatsapp-common.interface';
 import { Message as WPPConnectMessage } from '@wppconnect-team/wppconnect';
+import { isLidJid } from '../utils/jid.utils';
 
 @Injectable()
 export class WhatsappSessionsService {
@@ -643,8 +644,8 @@ export class WhatsappSessionsService {
   }
 
   /**
-   * Safely extracts the remote JID (chat ID) from a WhatsApp message
-   * Handles different message formats and edge cases
+   * Safely extracts the remote JID (chat ID) from a WhatsApp message.
+   * Prefers @c.us / @g.us over @lid for sendability; falls back to @lid if nothing else.
    */
   private getRemoteJid(message: WPPConnectMessage): string | undefined {
     if (!message) return undefined;
@@ -662,11 +663,13 @@ export class WhatsappSessionsService {
       return undefined;
     };
 
-    // Try to get from known properties
     const fromId = getId(message.from);
-    if (fromId) return fromId;
-
     const chatId = getId(message.chatId);
+
+    // Prefer non-@lid JID (sendable @c.us/@g.us) over @lid to avoid "Invalid WID value"
+    if (fromId && !isLidJid(fromId)) return fromId;
+    if (chatId && !isLidJid(chatId)) return chatId;
+    if (fromId) return fromId;
     if (chatId) return chatId;
 
     // For group messages or other cases

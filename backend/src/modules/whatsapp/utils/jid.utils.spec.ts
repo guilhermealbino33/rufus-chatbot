@@ -2,6 +2,7 @@ import {
   normalizeJid,
   extractPhoneFromJid,
   isLidJid,
+  isUsJid,
   extractPhoneFromFormattedName,
   resolveJid,
 } from './jid.utils';
@@ -75,6 +76,25 @@ describe('JID Utils', () => {
     it('should return false for null/undefined', () => {
       expect(isLidJid(null as any)).toBe(false);
       expect(isLidJid(undefined as any)).toBe(false);
+    });
+  });
+
+  describe('isUsJid', () => {
+    it('should return true for @c.us JID', () => {
+      expect(isUsJid('5548991426316@c.us')).toBe(true);
+    });
+
+    it('should return false for @lid JID', () => {
+      expect(isUsJid('257431800180973@lid')).toBe(false);
+    });
+
+    it('should return false for @g.us JID', () => {
+      expect(isUsJid('123456789@g.us')).toBe(false);
+    });
+
+    it('should return false for null/undefined', () => {
+      expect(isUsJid(null as any)).toBe(false);
+      expect(isUsJid(undefined as any)).toBe(false);
     });
   });
 

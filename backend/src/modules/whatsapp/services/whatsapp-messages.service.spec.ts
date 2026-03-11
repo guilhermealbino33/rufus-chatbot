@@ -11,6 +11,7 @@ interface MakeSutTypes {
   sut: WhatsappMessagesService;
   clientManager: jest.Mocked<WhatsappClientManager>;
   webhookService: jest.Mocked<WebhookService>;
+  loggerService: any;
 }
 
 const makeSut = (): MakeSutTypes => {
@@ -23,12 +24,26 @@ const makeSut = (): MakeSutTypes => {
     getClient: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientManager>;
 
-  const sut = new WhatsappMessagesService(clientManager as any, webhookService);
+  const loggerService = {
+    forContext: jest.fn().mockReturnValue({
+      log: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn(),
+    }),
+  };
+
+  const sut = new WhatsappMessagesService(
+    clientManager as any,
+    webhookService,
+    loggerService as any,
+  );
 
   return {
     sut,
     clientManager: clientManager as any,
     webhookService,
+    loggerService,
   };
 };
 
@@ -113,6 +128,47 @@ describe('WhatsappMessagesService', () => {
       await expect(
         sut.send({ sessionName, phone: '5511999999999', message: 'hi' }),
       ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should send directly if format is @lid', async () => {
+      const { sut, clientManager } = makeSut();
+
+      const sessionName = 'lid-session';
+      const mockClient = {
+        sendText: jest.fn().mockResolvedValue({ msgId: 'lid-123' }),
+      };
+      clientManager.getClient.mockReturnValue(mockClient as any);
+
+      const lidJid = '123456789@lid';
+      const result = await sut.send({ sessionName, phone: lidJid, message: 'hello lid' });
+
+      expect(mockClient.sendText).toHaveBeenCalledWith(lidJid, 'hello lid');
+      expect(result.success).toBe(true);
+    });
+
+    it('should fallback to getContact and retry if @lid send fails', async () => {
+      const { sut, clientManager } = makeSut();
+
+      const sessionName = 'lid-fallback-session';
+      const lidJid = '123456789@lid';
+      const resolvedJid = '5511999998888@c.us';
+
+      const mockClient = {
+        sendText: jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Invalid WID'))
+          .mockResolvedValueOnce({ msgId: 'fallback-123' }),
+        getContact: jest.fn().mockResolvedValue({ id: resolvedJid }),
+      };
+      clientManager.getClient.mockReturnValue(mockClient as any);
+
+      const result = await sut.send({ sessionName, phone: lidJid, message: 'hello fallback' });
+
+      expect(mockClient.sendText).toHaveBeenCalledTimes(2);
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(1, lidJid, 'hello fallback');
+      expect(mockClient.getContact).toHaveBeenCalledWith(lidJid);
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, resolvedJid, 'hello fallback');
+      expect(result.success).toBe(true);
     });
   });
 });

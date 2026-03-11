@@ -91,21 +91,42 @@ export class WhatsappMessagesService implements OnModuleInit {
         message: `[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`,
       });
 
-      // For @lid identifiers, we send directly without checkNumberStatus
-      // because LIDs are already validated identifiers from incoming messages
+      // For @lid identifiers, try direct send first; fallback to getContact() if it fails
       if (isLidJid(normalizedJid)) {
         this.logger.debug({
           severity: LogSeverity.DEBUG,
           message: `[${sessionName}] Detected LID format, sending directly to: ${normalizedJid}`,
         });
 
-        const result = await client.sendText(normalizedJid, message);
+        try {
+          const result = await client.sendText(normalizedJid, message);
+          return {
+            success: true,
+            message: 'Message sent successfully',
+            data: result,
+          };
+        } catch (lidError) {
+          this.logger.debug({
+            severity: LogSeverity.DEBUG,
+            message: `[${sessionName}] LID send failed, resolving contact for: ${normalizedJid}`,
+          });
 
-        return {
-          success: true,
-          message: 'Message sent successfully',
-          data: result,
-        };
+          const contact = await client.getContact(normalizedJid);
+          const resolvedId = contact?.id;
+          if (resolvedId && !isLidJid(resolvedId)) {
+            this.logger.debug({
+              severity: LogSeverity.DEBUG,
+              message: `[${sessionName}] Resolved LID to ${resolvedId}, retrying send`,
+            });
+            const result = await client.sendText(resolvedId, message);
+            return {
+              success: true,
+              message: 'Message sent successfully',
+              data: result,
+            };
+          }
+          throw lidError;
+        }
       }
 
       // For @c.us identifiers, validate with checkNumberStatus first

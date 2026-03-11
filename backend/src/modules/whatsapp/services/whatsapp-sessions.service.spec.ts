@@ -16,6 +16,7 @@ interface MakeSutTypes {
   sessionRepository: jest.Mocked<Repository<WhatsappSession>>;
   clientManager: jest.Mocked<WhatsappClientManager>;
   webhookService: jest.Mocked<WebhookService>;
+  loggerService: any;
 }
 
 const makeSut = (): MakeSutTypes => {
@@ -45,7 +46,21 @@ const makeSut = (): MakeSutTypes => {
     isClientInitializing: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientManager>;
 
-  const sut = new WhatsappSessionsService(sessionRepository, clientManager as any, webhookService);
+  const loggerService = {
+    forContext: jest.fn().mockReturnValue({
+      log: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn(),
+    }),
+  };
+
+  const sut = new WhatsappSessionsService(
+    sessionRepository,
+    clientManager as any,
+    webhookService,
+    loggerService as any,
+  );
 
   (sut as any).logger = {
     log: jest.fn(),
@@ -58,6 +73,7 @@ const makeSut = (): MakeSutTypes => {
     sessionRepository,
     clientManager: clientManager as any,
     webhookService,
+    loggerService,
   };
 };
 
@@ -278,6 +294,73 @@ describe('WhatsappSessionsService', () => {
 
       const result = await sut.getQRCode(sessionName);
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('handleIncomingMessage', () => {
+    it('should emit message with @c.us JID when both @c.us and @lid are present', async () => {
+      const { sut, webhookService } = makeSut();
+      const sessionName = 'test-session';
+
+      const mockMessage = {
+        id: { _serialized: 'msg_123' },
+        from: '5511999998888@c.us',
+        chatId: '257431800180973@lid',
+        body: 'hello',
+        t: 1625097600,
+        isGroupMsg: false,
+      } as any;
+
+      await (sut as any).handleIncomingMessage(sessionName, mockMessage);
+
+      expect(webhookService.emitMessageReceived).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '5511999998888@c.us',
+          chatId: '5511999998888@c.us', // It uses the same remoteJid for both
+        }),
+      );
+    });
+
+    it('should emit message with @lid JID if no @c.us/@g.us is available', async () => {
+      const { sut, webhookService } = makeSut();
+      const sessionName = 'test-session';
+
+      const mockMessage = {
+        id: { _serialized: 'msg_124' },
+        from: '257431800180973@lid',
+        chatId: { _serialized: '257431800180973@lid' },
+        body: 'hello lid',
+        t: 1625097600,
+        isGroupMsg: false,
+      } as any;
+
+      await (sut as any).handleIncomingMessage(sessionName, mockMessage);
+
+      expect(webhookService.emitMessageReceived).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '257431800180973@lid',
+        }),
+      );
+    });
+
+    it('should extract JID from nested object with _serialized', async () => {
+      const { sut, webhookService } = makeSut();
+      const sessionName = 'test-session';
+
+      const mockMessage = {
+        id: 'msg_125',
+        from: { _serialized: '5511999998888@c.us' },
+        body: 'hello nested',
+        t: 1625097600,
+      } as any;
+
+      await (sut as any).handleIncomingMessage(sessionName, mockMessage);
+
+      expect(webhookService.emitMessageReceived).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '5511999998888@c.us',
+        }),
+      );
     });
   });
 });
