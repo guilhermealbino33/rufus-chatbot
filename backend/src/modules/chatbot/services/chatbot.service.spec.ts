@@ -1,10 +1,10 @@
 import { ChatbotService } from './chatbot.service';
-import { WebhookService } from '../../shared/services/webhook.service';
+import { WebhookService } from '../../../shared/services/webhook.service';
 import { ChatbotUserService } from './chatbot-user.service';
-import { FlowLog } from './entities/flow-log.entity';
-import { ChatbotState } from './enums';
+import { FlowLog } from '../entities/flow-log.entity';
+import { ChatbotState } from '../enums';
 import { Repository } from 'typeorm';
-import { ChatbotUser } from './entities/chatbot-user.entity';
+import { ChatbotUser } from '../entities/chatbot-user.entity';
 
 interface makeSutTypes {
   service: ChatbotService;

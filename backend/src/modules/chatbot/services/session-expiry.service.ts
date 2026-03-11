@@ -8,8 +8,8 @@ import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { WebhookService } from '@/shared/services/webhook.service';
 import { OutgoingWhatsappMessage } from '@/shared/interfaces/messaging.interface';
 import { ChatbotUserService } from './chatbot-user.service';
-import { FlowLog } from './entities/flow-log.entity';
-import { ChatbotState, FlowAction } from './enums';
+import { FlowLog } from '../entities/flow-log.entity';
+import { ChatbotState, FlowAction } from '../enums';
 
 const SESSION_TIMEOUT_MINUTES_DEFAULT = 15;
 const SESSION_EXPIRY_FAREWELL =

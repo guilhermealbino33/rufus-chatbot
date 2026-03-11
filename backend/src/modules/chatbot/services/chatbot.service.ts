@@ -1,17 +1,17 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { AppLoggerService } from '@/shared/services/logger.service';
 import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
-import { WebhookService } from '../../shared/services/webhook.service';
+import { WebhookService } from '../../../shared/services/webhook.service';
 import {
   IncomingWhatsappMessage,
   OutgoingWhatsappMessage,
-} from '../../shared/interfaces/messaging.interface';
+} from '../../../shared/interfaces/messaging.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
-import { FlowLog } from './entities/flow-log.entity';
-import { FUNNEL_TREE, getMainMenuMessage } from './funnel.config';
-import { ChatbotState, FlowAction } from './enums';
+import { FlowLog } from '../entities/flow-log.entity';
+import { FUNNEL_TREE, getMainMenuMessage } from '../config/funnel.config';
+import { ChatbotState, FlowAction } from '../enums';
 
 @Injectable()
 export class ChatbotService implements OnModuleInit {

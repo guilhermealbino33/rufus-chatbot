@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import { ChatbotUserService } from './chatbot-user.service';
-import { ChatbotUser } from './entities/chatbot-user.entity';
-import { ChatbotState } from './enums/chatbot-state.enum';
+import { ChatbotUser } from '../entities/chatbot-user.entity';
+import { ChatbotState } from '../enums/chatbot-state.enum';
 
 interface MakeSutTypes {
   service: ChatbotUserService;

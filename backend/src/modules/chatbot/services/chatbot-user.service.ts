@@ -3,8 +3,8 @@ import { AppLoggerService } from '@/shared/services/logger.service';
 import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ChatbotUser } from './entities/chatbot-user.entity';
-import { ChatbotState } from './enums/chatbot-state.enum';
+import { ChatbotUser } from '../entities/chatbot-user.entity';
+import { ChatbotState } from '../enums/chatbot-state.enum';
 
 @Injectable()
 export class ChatbotUserService {

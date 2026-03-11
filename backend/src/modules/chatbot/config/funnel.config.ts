@@ -1,4 +1,4 @@
-import { ChatbotState, FlowAction } from './enums';
+import { ChatbotState, FlowAction } from '../enums';
 
 export interface FunnelStep {
   id: string;

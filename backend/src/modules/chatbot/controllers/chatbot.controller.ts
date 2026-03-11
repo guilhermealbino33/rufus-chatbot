@@ -1,5 +1,5 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ChatbotService } from './chatbot.service';
+import { ChatbotService } from '../services/chatbot.service';
 
 @Controller('webhook')
 export class ChatbotController {
