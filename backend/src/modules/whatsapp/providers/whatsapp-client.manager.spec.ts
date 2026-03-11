@@ -12,7 +12,7 @@ const makeSut = (): MakeSutTypes => {
     create: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientFactory>;
 
-  const sut = new WhatsappClientManager(factory);
+  const sut = new WhatsappClientManager(factory, {} as any);
 
   // Mock logger
   (sut as any).logger = {
