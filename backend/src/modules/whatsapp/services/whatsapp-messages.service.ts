@@ -53,7 +53,16 @@ export class WhatsappMessagesService implements OnModuleInit {
   ): Promise<ApiResponse | null> {
     try {
       const pnLidEntry = await client.getPnLidEntry(lidJid);
-      const phoneJid = pnLidEntry?.phoneNumber?._serialized;
+
+      // getPnLidEntry may return phoneNumber as a plain string OR as a WID object
+      const rawPhoneNumber = pnLidEntry?.phoneNumber;
+      const phoneJid: string | undefined =
+        typeof rawPhoneNumber === 'string'
+          ? rawPhoneNumber
+          : typeof rawPhoneNumber?._serialized === 'string'
+            ? rawPhoneNumber._serialized
+            : undefined;
+
       this.logger.debug({
         severity: LogSeverity.DEBUG,
         message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
@@ -159,7 +168,7 @@ export class WhatsappMessagesService implements OnModuleInit {
             message: `[${sessionName}] getContact returned id type=${typeof rawContactId} value=${JSON.stringify(rawContactId)}, resolvedId=${resolvedId}`,
           });
 
-          if (resolvedId && !isLidJid(resolvedId)) {
+          if (resolvedId && typeof resolvedId === 'string' && !isLidJid(resolvedId)) {
             this.logger.debug({
               severity: LogSeverity.DEBUG,
               message: `[${sessionName}] Resolved LID to ${resolvedId}, retrying send`,
