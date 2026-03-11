@@ -30,7 +30,13 @@ const makeSut = async (): Promise<makeSutTypes> => {
   } as unknown as WebhookService;
 
   const loggerService = {
-    forContext: jest.fn().mockReturnThis(),
+    forContext: jest.fn().mockReturnValue({
+      log: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      verbose: jest.fn(),
+    }),
   } as unknown as AppLoggerService;
 
   const sut = new ChatbotService(
@@ -70,8 +76,20 @@ describe('ChatbotService', () => {
       const response = await service.processMessage('session1', '5511999999999', 'Hello');
 
       expect(response).toContain('Olá! Bem-vindo ao Suporte da Rufus');
-      // Should stay in START since input didn't match any option, but fallback is START
-      expect(response).toContain('Opção inválida');
+      // At START state, any unrecognized input is a landing/greeting
+      expect(response).not.toContain('Opção inválida');
+    });
+
+    it('should return invalid option message when input is not recognized in non-START state', async () => {
+      const { service, chatbotUserService } = await makeSut();
+      jest.spyOn(chatbotUserService, 'getOrCreate').mockResolvedValue({
+        ...userExample,
+        currentStep: 'FINANCEIRO_MENU',
+      } as unknown as ChatbotUser);
+
+      const response = await service.processMessage('session1', '5511999999999', 'invalid');
+
+      expect(response).toContain('não consegui entender "invalid"');
     });
 
     it('should transition to FINANCEIRO_MENU when user selects option 1', async () => {
@@ -80,7 +98,9 @@ describe('ChatbotService', () => {
 
       const response = await service.processMessage('session1', '5511999999999', '1');
 
-      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, 'FINANCEIRO_MENU');
+      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, 'FINANCEIRO_MENU', {
+        lastSessionId: 'session1',
+      });
       expect(response).toContain('Setor Financeiro');
     });
 
@@ -91,7 +111,9 @@ describe('ChatbotService', () => {
       // Select option 3 for human handoff
       const response = await service.processMessage('session1', '5511999999999', '3');
 
-      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, ChatbotState.HANDOFF_ACTIVE);
+      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, ChatbotState.HANDOFF_ACTIVE, {
+        lastSessionId: 'session1',
+      });
       expect(response).toContain('transferindo seu atendimento');
     });
 
@@ -117,7 +139,9 @@ describe('ChatbotService', () => {
 
       const response = await service.processMessage('session1', '5511999999999', '#VOLTAR');
 
-      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, ChatbotState.START);
+      expect(chatbotUserService.updateState).toHaveBeenCalledWith(1, ChatbotState.START, {
+        lastSessionId: 'session1',
+      });
       expect(response).toContain('Bem-vindo ao Suporte da Rufus');
     });
   });
