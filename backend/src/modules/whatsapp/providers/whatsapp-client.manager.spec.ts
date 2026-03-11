@@ -66,7 +66,9 @@ describe('WhatsappClientManager', () => {
       expect(factory.create).toHaveBeenCalledTimes(1);
       expect(result).toBe(client);
       expect((sut as any).logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(`Client for ${sessionName} already exists`),
+        expect.objectContaining({
+          message: expect.stringContaining(`Client for ${sessionName} already exists`),
+        }),
       );
     });
   });
