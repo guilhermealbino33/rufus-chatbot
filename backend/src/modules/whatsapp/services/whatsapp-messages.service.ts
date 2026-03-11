@@ -38,6 +38,44 @@ export class WhatsappMessagesService implements OnModuleInit {
   }
 
   /**
+   * Phase 3 fallback: resolves LID → @c.us via getPnLidEntry and sends the message.
+   * @returns ApiResponse on success, null if resolution or send failed
+   */
+  private async trySendViaPnLidEntry(
+    client: {
+      getPnLidEntry: (jid: string) => Promise<{ phoneNumber?: { _serialized?: string } }>;
+      sendText: (to: string, text: string) => Promise<unknown>;
+    },
+    sessionName: string,
+    lidJid: string,
+    message: string,
+    isLidJid: (jid: string) => boolean,
+  ): Promise<ApiResponse | null> {
+    try {
+      const pnLidEntry = await client.getPnLidEntry(lidJid);
+      const phoneJid = pnLidEntry?.phoneNumber?._serialized;
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
+      });
+      if (phoneJid && !isLidJid(phoneJid)) {
+        const result = await client.sendText(phoneJid, message);
+        return {
+          success: true,
+          message: 'Message sent successfully',
+          data: result,
+        };
+      }
+    } catch (pnLidError) {
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] getPnLidEntry failed: ${pnLidError?.message}`,
+      });
+    }
+    return null;
+  }
+
+  /**
    * Handles outgoing messages from the event system
    */
   private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
@@ -133,6 +171,15 @@ export class WhatsappMessagesService implements OnModuleInit {
               data: result,
             };
           }
+
+          const pnLidResult = await this.trySendViaPnLidEntry(
+            client,
+            sessionName,
+            normalizedJid,
+            message,
+            isLidJid,
+          );
+          if (pnLidResult) return pnLidResult;
           throw lidError;
         }
       }
