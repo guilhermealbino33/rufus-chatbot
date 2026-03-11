@@ -717,7 +717,7 @@ export class WhatsappSessionsService {
 
       this.logger.debug({
         severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] Raw message: ${JSON.stringify(message, null, 2)}`,
+        message: `[${sessionName}] message.from type=${typeof message.from} value=${JSON.stringify(message.from)}, chatId type=${typeof message.chatId} value=${JSON.stringify(message.chatId)}`,
       });
 
       const remoteJid = this.getRemoteJid(message);

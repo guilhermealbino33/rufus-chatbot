@@ -112,7 +112,15 @@ export class WhatsappMessagesService implements OnModuleInit {
           });
 
           const contact = await client.getContact(normalizedJid);
-          const resolvedId = contact?.id;
+          const rawContactId = contact?.id as { _serialized?: string } | string | undefined;
+          const resolvedId: string | undefined =
+            typeof rawContactId === 'string' ? rawContactId : rawContactId?._serialized;
+
+          this.logger.debug({
+            severity: LogSeverity.DEBUG,
+            message: `[${sessionName}] getContact returned id type=${typeof rawContactId} value=${JSON.stringify(rawContactId)}, resolvedId=${resolvedId}`,
+          });
+
           if (resolvedId && !isLidJid(resolvedId)) {
             this.logger.debug({
               severity: LogSeverity.DEBUG,

@@ -49,10 +49,15 @@ export class ChatbotService implements OnModuleInit {
 
     // Extract phone number from remote JID (e.g. 5511999999999@c.us -> 5511999999999)
     const phone = msg.from.replace(/\D/g, '');
+    const jidFormat = msg.from?.endsWith?.('@lid')
+      ? 'LID'
+      : msg.from?.endsWith?.('@c.us')
+        ? 'c.us'
+        : 'other';
 
     this.logger.debug({
       severity: LogSeverity.DEBUG,
-      message: `[${msg.sessionId}] Extracted phone for session: ${phone} (original JID: ${msg.from})`,
+      message: `[${msg.sessionId}] Extracted phone: ${phone} JID format: ${jidFormat} (original: ${msg.from})`,
     });
 
     const response = await this.processMessage(msg.sessionId, phone, msg.body);
