@@ -177,6 +177,7 @@ describe('WhatsappMessagesService', () => {
       const sessionName = 'lid-pnlid-session';
       const lidJid = '257431800180973@lid';
       const phoneJid = '5511999998888@c.us';
+      const phoneDigits = '5511999998888';
 
       const mockClient = {
         sendText: jest
@@ -185,7 +186,7 @@ describe('WhatsappMessagesService', () => {
           .mockResolvedValueOnce({ msgId: 'pnlid-123' }),
         getContact: jest.fn().mockResolvedValue({ id: { _serialized: lidJid } }),
         getPnLidEntry: jest.fn().mockResolvedValue({
-          phoneNumber: { _serialized: phoneJid },
+          phoneNumber: { id: phoneDigits, server: 'c.us', _serialized: phoneJid },
         }),
       };
       clientManager.getClient.mockReturnValue(mockClient as any);
@@ -196,7 +197,7 @@ describe('WhatsappMessagesService', () => {
       expect(mockClient.sendText).toHaveBeenNthCalledWith(1, lidJid, 'hello pnlid');
       expect(mockClient.getContact).toHaveBeenCalledWith(lidJid);
       expect(mockClient.getPnLidEntry).toHaveBeenCalledWith(lidJid);
-      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, phoneJid, 'hello pnlid');
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, phoneDigits, 'hello pnlid');
       expect(result.success).toBe(true);
     });
   });

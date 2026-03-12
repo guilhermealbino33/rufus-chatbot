@@ -43,7 +43,9 @@ export class WhatsappMessagesService implements OnModuleInit {
    */
   private async trySendViaPnLidEntry(
     client: {
-      getPnLidEntry: (jid: string) => Promise<{ phoneNumber?: { _serialized?: string } }>;
+      getPnLidEntry: (jid: string) => Promise<{
+        phoneNumber?: { id?: string; server?: string; _serialized?: string };
+      }>;
       sendText: (to: string, text: string) => Promise<unknown>;
     },
     sessionName: string,
@@ -54,14 +56,19 @@ export class WhatsappMessagesService implements OnModuleInit {
     try {
       const pnLidEntry = await client.getPnLidEntry(lidJid);
 
-      // getPnLidEntry may return phoneNumber as a plain string OR as a WID object
+      // Prefer phoneNumber.id (pure digits) over _serialized to hit createWid's /^\d+$/ path
       const rawPhoneNumber = pnLidEntry?.phoneNumber;
       const phoneJid: string | undefined =
-        typeof rawPhoneNumber === 'string'
-          ? rawPhoneNumber
-          : typeof rawPhoneNumber?._serialized === 'string'
-            ? rawPhoneNumber._serialized
-            : undefined;
+        rawPhoneNumber == null
+          ? undefined
+          : typeof rawPhoneNumber === 'string'
+            ? rawPhoneNumber
+            : (rawPhoneNumber.id ??
+              (typeof rawPhoneNumber._serialized === 'string'
+                ? rawPhoneNumber._serialized
+                : rawPhoneNumber._serialized != null
+                  ? String(rawPhoneNumber._serialized)
+                  : String(rawPhoneNumber)));
 
       this.logger.debug({
         severity: LogSeverity.DEBUG,
