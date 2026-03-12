@@ -63,12 +63,13 @@ export class WhatsappMessagesService implements OnModuleInit {
           ? undefined
           : typeof rawPhoneNumber === 'string'
             ? rawPhoneNumber
-            : (rawPhoneNumber.id ??
-              (typeof rawPhoneNumber._serialized === 'string'
-                ? rawPhoneNumber._serialized
-                : rawPhoneNumber._serialized != null
-                  ? String(rawPhoneNumber._serialized)
-                  : String(rawPhoneNumber)));
+            : typeof rawPhoneNumber._serialized === 'string'
+              ? rawPhoneNumber._serialized
+              : rawPhoneNumber._serialized != null
+                ? String(rawPhoneNumber._serialized)
+                : rawPhoneNumber.id != null
+                  ? String(rawPhoneNumber.id)
+                  : String(rawPhoneNumber);
 
       this.logger.debug({
         severity: LogSeverity.DEBUG,
