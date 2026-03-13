@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   HttpException,
   ConflictException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,7 +29,7 @@ import { Message as WPPConnectMessage } from '@wppconnect-team/wppconnect';
 import { isLidJid } from '../utils/jid.utils';
 
 @Injectable()
-export class WhatsappSessionsService {
+export class WhatsappSessionsService implements OnModuleInit {
   private readonly logger: ILogger;
 
   constructor(
@@ -39,6 +40,29 @@ export class WhatsappSessionsService {
     private readonly loggerService: AppLoggerService,
   ) {
     this.logger = loggerService.forContext(WhatsappSessionsService.name);
+  }
+
+  async onModuleInit(): Promise<void> {
+    const connectedSessions = await this.sessionRepository.find({
+      where: { status: SessionStatus.CONNECTED },
+    });
+
+    if (connectedSessions.length === 0) {
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: 'Nenhuma sessão ativa encontrada para recuperar no startup.',
+      });
+      return;
+    }
+
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Recuperando ${connectedSessions.length} sessão(ões) ativa(s) no startup...`,
+    });
+
+    for (const session of connectedSessions) {
+      this.recoverSession(session.sessionName);
+    }
   }
 
   async start({
