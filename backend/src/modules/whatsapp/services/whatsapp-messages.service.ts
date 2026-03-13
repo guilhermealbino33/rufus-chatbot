@@ -38,89 +38,6 @@ export class WhatsappMessagesService implements OnModuleInit {
   }
 
   /**
-   * Phase 3 fallback: resolves LID → @c.us via getPnLidEntry and sends the message.
-   * @returns ApiResponse on success, null if resolution or send failed
-   */
-  private async trySendViaPnLidEntry(
-    client: {
-      getPnLidEntry: (jid: string) => Promise<{
-        phoneNumber?: { id?: string; server?: string; _serialized?: string };
-      }>;
-      sendText: (to: string, text: string) => Promise<unknown>;
-    },
-    sessionName: string,
-    lidJid: string,
-    message: string,
-    isLidJid: (jid: string) => boolean,
-  ): Promise<ApiResponse | null> {
-    try {
-      const pnLidEntry = await client.getPnLidEntry(lidJid);
-
-      // Prefer _serialized (full JID e.g. 554891426316@c.us) — wwebjs requires @c.us format, not pure digits
-      const rawPhoneNumber = pnLidEntry?.phoneNumber;
-      let phoneJid: string | undefined =
-        rawPhoneNumber == null
-          ? undefined
-          : typeof rawPhoneNumber === 'string'
-            ? rawPhoneNumber
-            : typeof rawPhoneNumber._serialized === 'string'
-              ? rawPhoneNumber._serialized
-              : rawPhoneNumber._serialized != null
-                ? String(rawPhoneNumber._serialized)
-                : rawPhoneNumber.id != null
-                  ? String(rawPhoneNumber.id)
-                  : String(rawPhoneNumber);
-
-      // Defensive: ensure phoneJid has @c.us suffix when it's pure digits
-      if (phoneJid && !phoneJid.includes('@')) {
-        phoneJid = `${phoneJid}@c.us`;
-      }
-
-      this.logger.debug({
-        severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
-      });
-      if (phoneJid && !isLidJid(phoneJid)) {
-        const result = await client.sendText(phoneJid, message);
-        return {
-          success: true,
-          message: 'Message sent successfully',
-          data: result,
-        };
-      }
-    } catch (pnLidError) {
-      this.logger.debug({
-        severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] trySendViaPnLidEntry inner error: ${pnLidError?.message}`,
-      });
-    }
-    return null;
-  }
-
-  /**
-   * Handles outgoing messages from the event system
-   */
-  private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
-    try {
-      this.logger.debug({
-        severity: LogSeverity.DEBUG,
-        message: `[${msg.sessionId}] Handling outgoing message to: ${msg.to}`,
-      });
-
-      await this.send({
-        sessionName: msg.sessionId,
-        phone: msg.to,
-        message: msg.body,
-      });
-    } catch (error) {
-      this.logger.error({
-        severity: LogSeverity.ERROR,
-        message: `Failed to send message via event to ${msg.to}: ${error.message}`,
-      });
-    }
-  }
-
-  /**
    * Sends a message via WhatsApp (can be called directly via API or via events)
    */
   async send({ sessionName, phone, message }: SendMessageDTO): Promise<ApiResponse> {
@@ -248,6 +165,89 @@ export class WhatsappMessagesService implements OnModuleInit {
         success: false,
         message: 'Failed to send message',
         error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Phase 3 fallback: resolves LID → @c.us via getPnLidEntry and sends the message.
+   * @returns ApiResponse on success, null if resolution or send failed
+   */
+  private async trySendViaPnLidEntry(
+    client: {
+      getPnLidEntry: (jid: string) => Promise<{
+        phoneNumber?: { id?: string; server?: string; _serialized?: string };
+      }>;
+      sendText: (to: string, text: string) => Promise<unknown>;
+    },
+    sessionName: string,
+    lidJid: string,
+    message: string,
+    isLidJid: (jid: string) => boolean,
+  ): Promise<ApiResponse | null> {
+    try {
+      const pnLidEntry = await client.getPnLidEntry(lidJid);
+
+      // Prefer _serialized (full JID e.g. 554891426316@c.us) — wwebjs requires @c.us format, not pure digits
+      const rawPhoneNumber = pnLidEntry?.phoneNumber;
+      let phoneJid: string | undefined =
+        rawPhoneNumber == null
+          ? undefined
+          : typeof rawPhoneNumber === 'string'
+            ? rawPhoneNumber
+            : typeof rawPhoneNumber._serialized === 'string'
+              ? rawPhoneNumber._serialized
+              : rawPhoneNumber._serialized != null
+                ? String(rawPhoneNumber._serialized)
+                : rawPhoneNumber.id != null
+                  ? String(rawPhoneNumber.id)
+                  : String(rawPhoneNumber);
+
+      // Defensive: ensure phoneJid has @c.us suffix when it's pure digits
+      if (phoneJid && !phoneJid.includes('@')) {
+        phoneJid = `${phoneJid}@c.us`;
+      }
+
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
+      });
+      if (phoneJid && !isLidJid(phoneJid)) {
+        const result = await client.sendText(phoneJid, message);
+        return {
+          success: true,
+          message: 'Message sent successfully',
+          data: result,
+        };
+      }
+    } catch (pnLidError) {
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] trySendViaPnLidEntry inner error: ${pnLidError?.message}`,
+      });
+    }
+    return null;
+  }
+
+  /**
+   * Handles outgoing messages from the event system
+   */
+  private async handleOutgoingMessage(msg: OutgoingWhatsappMessage): Promise<void> {
+    try {
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${msg.sessionId}] Handling outgoing message to: ${msg.to}`,
+      });
+
+      await this.send({
+        sessionName: msg.sessionId,
+        phone: msg.to,
+        message: msg.body,
+      });
+    } catch (error) {
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `Failed to send message via event to ${msg.to}: ${error.message}`,
       });
     }
   }
