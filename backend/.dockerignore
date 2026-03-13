@@ -24,4 +24,4 @@ Dockerfile*
 *.md
 
 # WPP session data (ephemeral)
-wpp-sessions
+tokens

@@ -6,8 +6,8 @@ collection.json
 .eslintcache
 
 # WPPConnect — tokens de sessão WhatsApp (credenciais, NUNCA commitar)
-wpp-sessions/
-**/wpp-sessions/
+tokens/
+**/tokens/
 
 # Logs
 *.log

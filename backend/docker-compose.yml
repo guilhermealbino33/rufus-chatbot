@@ -12,7 +12,7 @@ services:
       - DATABASE_URL=postgres://user:password@db:5432/dbname
       - CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
       # Aponta para o volume persistido dentro do container
-      - WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
+      - WPPCONNECT_TOKENS_DIR=/usr/src/app/tokens
     depends_on:
       db:
         condition: service_healthy
@@ -25,7 +25,7 @@ services:
     volumes:
       # Volume persistente para tokens de sessão do WPPConnect.
       # SEM isso, toda reinicialização do container perde as sessões autenticadas!
-      - wpp_sessions:/usr/src/app/wpp-sessions
+      - wpp_sessions:/usr/src/app/tokens
 
   db:
     image: postgres:13
