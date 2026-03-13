@@ -188,6 +188,10 @@ describe('WhatsappMessagesService', () => {
         getPnLidEntry: jest.fn().mockResolvedValue({
           phoneNumber: { id: phoneDigits, server: 'c.us', _serialized: phoneJid },
         }),
+        checkNumberStatus: jest.fn().mockResolvedValue({
+          numberExists: true,
+          id: { _serialized: phoneJid },
+        }),
       };
       clientManager.getClient.mockReturnValue(mockClient as any);
 

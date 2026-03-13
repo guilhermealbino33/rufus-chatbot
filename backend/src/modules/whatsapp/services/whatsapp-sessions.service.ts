@@ -32,6 +32,9 @@ import { isLidJid } from '../utils/jid.utils';
 export class WhatsappSessionsService implements OnModuleInit {
   private readonly logger: ILogger;
 
+  /** Cache LID -> @c.us para evitar chamadas repetidas a getPnLidEntry */
+  private readonly lidToUsCache = new Map<string, string>();
+
   constructor(
     @InjectRepository(WhatsappSession)
     private sessionRepository: Repository<WhatsappSession>,
@@ -693,6 +696,14 @@ export class WhatsappSessionsService implements OnModuleInit {
     // Prefer non-@lid JID (sendable @c.us/@g.us) over @lid to avoid "Invalid WID value"
     if (fromId && !isLidJid(fromId)) return fromId;
     if (chatId && !isLidJid(chatId)) return chatId;
+
+    // Extra sources: Contact.sender.id and MessageId.remote may have @c.us when from is @lid
+    const senderId = getId((message as any).sender?.id);
+    if (senderId && !isLidJid(senderId)) return senderId;
+
+    const idRemote = getId((message as any).id?.remote);
+    if (idRemote && !isLidJid(idRemote)) return idRemote;
+
     if (fromId) return fromId;
     if (chatId) return chatId;
 
@@ -744,7 +755,7 @@ export class WhatsappSessionsService implements OnModuleInit {
         message: `[${sessionName}] message.from type=${typeof message.from} value=${JSON.stringify(message.from)}, chatId type=${typeof message.chatId} value=${JSON.stringify(message.chatId)}`,
       });
 
-      const remoteJid = this.getRemoteJid(message);
+      let remoteJid = this.getRemoteJid(message);
       if (!remoteJid) {
         this.logger.warn({
           severity: LogSeverity.WARNING,
@@ -752,6 +763,42 @@ export class WhatsappSessionsService implements OnModuleInit {
           messageId,
         });
         return;
+      }
+
+      // Resolução ativa @lid -> @c.us quando getRemoteJid retornou apenas @lid
+      if (isLidJid(remoteJid)) {
+        const cached = this.lidToUsCache.get(remoteJid);
+        if (cached) {
+          remoteJid = cached;
+          this.logger.debug({
+            severity: LogSeverity.DEBUG,
+            message: `[${sessionName}] LID->@c.us from cache: ${remoteJid}`,
+          });
+        } else {
+          const client = this.clientManager.getClient(sessionName);
+          if (client) {
+            try {
+              const entry = await (client as any).getPnLidEntry(remoteJid);
+              const resolved =
+                typeof entry?.phoneNumber === 'string'
+                  ? entry.phoneNumber
+                  : entry?.phoneNumber?._serialized;
+              if (resolved && !isLidJid(resolved)) {
+                this.lidToUsCache.set(remoteJid, resolved);
+                remoteJid = resolved;
+                this.logger.debug({
+                  severity: LogSeverity.DEBUG,
+                  message: `[${sessionName}] LID resolved via getPnLidEntry: ${remoteJid}`,
+                });
+              }
+            } catch {
+              this.logger.debug({
+                severity: LogSeverity.DEBUG,
+                message: `[${sessionName}] getPnLidEntry failed, falling back to @lid`,
+              });
+            }
+          }
+        }
       }
 
       this.logger.debug({

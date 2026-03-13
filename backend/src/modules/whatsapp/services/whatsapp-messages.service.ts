@@ -178,6 +178,7 @@ export class WhatsappMessagesService implements OnModuleInit {
       getPnLidEntry: (jid: string) => Promise<{
         phoneNumber?: { id?: string; server?: string; _serialized?: string };
       }>;
+      checkNumberStatus: (jid: string) => Promise<{ id?: { _serialized?: string } }>;
       sendText: (to: string, text: string) => Promise<unknown>;
     },
     sessionName: string,
@@ -213,7 +214,10 @@ export class WhatsappMessagesService implements OnModuleInit {
         message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
       });
       if (phoneJid && !isLidJid(phoneJid)) {
-        const result = await client.sendText(phoneJid, message);
+        // Use checkNumberStatus before sendText (network query) to get valid targetJid, bypassing store-lookup issues
+        const check = await client.checkNumberStatus(phoneJid);
+        const targetJid = check?.id?._serialized ?? phoneJid;
+        const result = await client.sendText(targetJid, message);
         return {
           success: true,
           message: 'Message sent successfully',
