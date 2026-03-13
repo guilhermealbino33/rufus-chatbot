@@ -56,9 +56,9 @@ export class WhatsappMessagesService implements OnModuleInit {
     try {
       const pnLidEntry = await client.getPnLidEntry(lidJid);
 
-      // Prefer phoneNumber.id (pure digits) over _serialized to hit createWid's /^\d+$/ path
+      // Prefer _serialized (full JID e.g. 554891426316@c.us) — wwebjs requires @c.us format, not pure digits
       const rawPhoneNumber = pnLidEntry?.phoneNumber;
-      const phoneJid: string | undefined =
+      let phoneJid: string | undefined =
         rawPhoneNumber == null
           ? undefined
           : typeof rawPhoneNumber === 'string'
@@ -70,6 +70,11 @@ export class WhatsappMessagesService implements OnModuleInit {
                 : rawPhoneNumber.id != null
                   ? String(rawPhoneNumber.id)
                   : String(rawPhoneNumber);
+
+      // Defensive: ensure phoneJid has @c.us suffix when it's pure digits
+      if (phoneJid && !phoneJid.includes('@')) {
+        phoneJid = `${phoneJid}@c.us`;
+      }
 
       this.logger.debug({
         severity: LogSeverity.DEBUG,
@@ -86,7 +91,7 @@ export class WhatsappMessagesService implements OnModuleInit {
     } catch (pnLidError) {
       this.logger.debug({
         severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] getPnLidEntry failed: ${pnLidError?.message}`,
+        message: `[${sessionName}] trySendViaPnLidEntry inner error: ${pnLidError?.message}`,
       });
     }
     return null;
