@@ -57,7 +57,7 @@ export class SessionExpiryService {
           user.contextData?.lastSessionId ??
           (await this.getLastSessionForUser(user.phoneNumber)) ??
           defaultSession;
-        const targetJid = `${user.phoneNumber.replace(/\D/g, '')}@c.us`;
+        const targetJid = user.lidIdentifier || `${user.phoneNumber.replace(/\D/g, '')}@c.us`;
 
         this.webhookService.emitMessageSend({
           sessionId,

@@ -13,6 +13,9 @@ export interface IncomingWhatsappMessage {
   /** Número do remetente (ex: 5511999999999@c.us) */
   from: string;
 
+  /** JID original antes da resolução LID->@c.us (usar para reply) */
+  originalJid?: string;
+
   /** Conteúdo da mensagem */
   body: string;
 

@@ -765,6 +765,8 @@ export class WhatsappSessionsService implements OnModuleInit {
         return;
       }
 
+      const originalJid = remoteJid;
+
       // Resolução ativa @lid -> @c.us quando getRemoteJid retornou apenas @lid
       if (isLidJid(remoteJid)) {
         const cached = this.lidToUsCache.get(remoteJid);
@@ -810,6 +812,7 @@ export class WhatsappSessionsService implements OnModuleInit {
       const incomingMessage: IncomingWhatsappMessage = {
         sessionId: sessionName,
         from: remoteJid,
+        originalJid,
         body: message.body || '',
         timestamp: message.t ? new Date(message.t * 1000) : new Date(),
         isGroup: !!message.isGroupMsg,
