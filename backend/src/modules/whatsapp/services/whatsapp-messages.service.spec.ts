@@ -197,7 +197,7 @@ describe('WhatsappMessagesService', () => {
       expect(mockClient.sendText).toHaveBeenNthCalledWith(1, lidJid, 'hello pnlid');
       expect(mockClient.getContact).toHaveBeenCalledWith(lidJid);
       expect(mockClient.getPnLidEntry).toHaveBeenCalledWith(lidJid);
-      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, phoneDigits, 'hello pnlid');
+      expect(mockClient.sendText).toHaveBeenNthCalledWith(2, phoneJid, 'hello pnlid');
       expect(result.success).toBe(true);
     });
   });
