@@ -60,14 +60,16 @@ export class ChatbotService implements OnModuleInit {
       message: `[${msg.sessionId}] Extracted phone: ${phone} JID format: ${jidFormat} (original: ${msg.from})`,
     });
 
-    const response = await this.processMessage(msg.sessionId, phone, msg.body);
+    const lidIdentifier = msg.originalJid?.endsWith?.('@lid') ? msg.originalJid : undefined;
+    const response = await this.processMessage(msg.sessionId, phone, msg.body, lidIdentifier);
 
     if (response) {
       // Emit outgoing message via WebhookService
-      // IMPORTANT: We preserve the original JID (msg.from) to maintain @lid or @c.us format
+      // Use originalJid (LID) when available so send() uses the LID path; otherwise use resolved from
+      const replyTo = msg.originalJid || msg.from;
       const outgoingMessage: OutgoingWhatsappMessage = {
         sessionId: msg.sessionId,
-        to: msg.from, // ✅ Preserves @lid or @c.us format
+        to: replyTo,
         body: response,
       };
 
@@ -88,9 +90,14 @@ export class ChatbotService implements OnModuleInit {
    * @param body - Message content
    * @returns Response message or null if no response needed
    */
-  async processMessage(sessionId: string, phone: string, body: string): Promise<string | null> {
+  async processMessage(
+    sessionId: string,
+    phone: string,
+    body: string,
+    lidIdentifier?: string,
+  ): Promise<string | null> {
     // 1. Get or Create User Context
-    const user = await this.chatbotUserService.getOrCreate(phone);
+    const user = await this.chatbotUserService.getOrCreate(phone, undefined, lidIdentifier);
     const initialStep = user.currentStep;
 
     // Check if user is in HANDOFF state
