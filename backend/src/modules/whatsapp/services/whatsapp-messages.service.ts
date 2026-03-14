@@ -13,6 +13,7 @@ import { WhatsappClientManager } from '../providers';
 import { WebhookService } from '../../../shared/services/webhook.service';
 import { OutgoingWhatsappMessage } from '../../../shared/interfaces/messaging.interface';
 import { ApiResponse } from '../interfaces/whatsapp-common.interface';
+import * as wppconnect from '@wppconnect-team/wppconnect';
 
 @Injectable()
 export class WhatsappMessagesService implements OnModuleInit {
@@ -38,6 +39,44 @@ export class WhatsappMessagesService implements OnModuleInit {
   }
 
   /**
+   * Sends a text message via page.evaluate calling WPP.chat.sendTextMessage
+   * directly. This bypasses the WAPI.getMessageById step in client.sendText
+   * which fails with "Invalid WID value" for LID-migrated contacts.
+   *
+   * Also calls WPP.contact.queryExists first to update the local WA store
+   * (fix from WPPConnect 1.37.10+ for LID contacts).
+   */
+  private async sendTextDirect(
+    client: wppconnect.Whatsapp,
+    sessionName: string,
+    to: string,
+    content: string,
+  ): Promise<unknown> {
+    const page = (client as unknown as Record<string, unknown>).page as
+      | { evaluate: (fn: string, ...args: unknown[]) => Promise<unknown> }
+      | undefined;
+    if (!page) {
+      throw new Error('Client page not available for direct send');
+    }
+
+    this.logger.debug({
+      severity: LogSeverity.DEBUG,
+      message: `[${sessionName}] sendTextDirect: queryExists + sendTextMessage for: ${to}`,
+    });
+
+    // Runs in browser context where WPP is a global from @wppconnect/wa-js.
+    // Using a string function avoids TypeScript errors for browser-only globals.
+    return page.evaluate(
+      `async (to, content) => {
+        try { await WPP.contact.queryExists(to); } catch (_e) {}
+        return WPP.chat.sendTextMessage(to, content, { waitForAck: false });
+      }`,
+      to,
+      content,
+    );
+  }
+
+  /**
    * Sends a message via WhatsApp (can be called directly via API or via events)
    */
   async send({ sessionName, phone, message }: SendMessageDTO): Promise<ApiResponse> {
@@ -51,11 +90,8 @@ export class WhatsappMessagesService implements OnModuleInit {
     }
 
     try {
-      // Import JID utilities inline to avoid circular dependencies
       const { normalizeJid, isLidJid } = await import('../utils/jid.utils');
 
-      // Multi-line replacement to handle try-catch around normalizeJid
-      // Normalize the JID - this preserves @lid and @c.us formats, or converts pure numbers
       let normalizedJid: string;
       try {
         normalizedJid = normalizeJid(phone);
@@ -68,82 +104,41 @@ export class WhatsappMessagesService implements OnModuleInit {
         message: `[${sessionName}] Normalized JID: ${normalizedJid} (from input: ${phone})`,
       });
 
-      // For @lid identifiers, try direct send first; fallback to getContact() if it fails
+      // For @lid identifiers, resolve to @c.us then send directly
       if (isLidJid(normalizedJid)) {
         this.logger.debug({
           severity: LogSeverity.DEBUG,
-          message: `[${sessionName}] Detected LID format, sending directly to: ${normalizedJid}`,
+          message: `[${sessionName}] Detected LID format: ${normalizedJid}`,
         });
 
-        try {
-          const result = await client.sendText(normalizedJid, message);
-          return {
-            success: true,
-            message: 'Message sent successfully',
-            data: result,
-          };
-        } catch (lidError) {
+        // Resolve LID -> @c.us via getPnLidEntry
+        const resolvedJid = await this.resolveLidToUs(client, sessionName, normalizedJid);
+
+        if (resolvedJid) {
           this.logger.debug({
             severity: LogSeverity.DEBUG,
-            message: `[${sessionName}] LID send failed, resolving contact for: ${normalizedJid}`,
+            message: `[${sessionName}] LID resolved to ${resolvedJid}, sending directly`,
           });
-
-          const contact = await client.getContact(normalizedJid);
-          const rawContactId = contact?.id as { _serialized?: string } | string | undefined;
-          const resolvedId: string | undefined =
-            typeof rawContactId === 'string' ? rawContactId : rawContactId?._serialized;
-
-          this.logger.debug({
-            severity: LogSeverity.DEBUG,
-            message: `[${sessionName}] getContact returned id type=${typeof rawContactId} value=${JSON.stringify(rawContactId)}, resolvedId=${resolvedId}`,
-          });
-
-          if (resolvedId && typeof resolvedId === 'string' && !isLidJid(resolvedId)) {
-            this.logger.debug({
-              severity: LogSeverity.DEBUG,
-              message: `[${sessionName}] Resolved LID to ${resolvedId}, retrying send`,
-            });
-            const result = await client.sendText(resolvedId, message);
-            return {
-              success: true,
-              message: 'Message sent successfully',
-              data: result,
-            };
-          }
-
-          const pnLidResult = await this.trySendViaPnLidEntry(
-            client,
-            sessionName,
-            normalizedJid,
-            message,
-            isLidJid,
-          );
-          if (pnLidResult) return pnLidResult;
-          throw lidError;
+          const result = await this.sendTextDirect(client, sessionName, resolvedJid, message);
+          return { success: true, message: 'Message sent successfully', data: result };
         }
+
+        // Fallback: try direct LID send via sendTextDirect
+        this.logger.debug({
+          severity: LogSeverity.DEBUG,
+          message: `[${sessionName}] No @c.us resolution, trying direct LID send`,
+        });
+        const result = await this.sendTextDirect(client, sessionName, normalizedJid, message);
+        return { success: true, message: 'Message sent successfully', data: result };
       }
 
-      // For @c.us identifiers, validate with checkNumberStatus first
+      // For @c.us identifiers, use sendTextDirect (queryExists updates local DB, then send)
       this.logger.debug({
         severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] Validating number status for: ${normalizedJid}`,
+        message: `[${sessionName}] Sending to @c.us: ${normalizedJid}`,
       });
 
-      const resultCheck = await client.checkNumberStatus(normalizedJid);
-
-      if (!resultCheck.numberExists) {
-        throw new BadRequestException(`Number ${phone} is not registered on WhatsApp`);
-      }
-
-      // Use the ID returned by checkNumberStatus if available, otherwise use normalized JID
-      const targetJid = resultCheck.id?._serialized || normalizedJid;
-
-      this.logger.debug({
-        severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] Sending message to: ${targetJid}`,
-      });
-
-      const result = await client.sendText(targetJid, message);
+      const result = await this.sendTextDirect(client, sessionName, normalizedJid, message);
 
       return {
         success: true,
@@ -170,26 +165,24 @@ export class WhatsappMessagesService implements OnModuleInit {
   }
 
   /**
-   * Phase 3 fallback: resolves LID → @c.us via getPnLidEntry and sends the message.
-   * @returns ApiResponse on success, null if resolution or send failed
+   * Resolves a @lid JID to @c.us via getPnLidEntry and getContact.
+   * Returns the resolved @c.us JID, or null if resolution failed.
    */
-  private async trySendViaPnLidEntry(
-    client: {
-      getPnLidEntry: (jid: string) => Promise<{
-        phoneNumber?: { id?: string; server?: string; _serialized?: string };
-      }>;
-      checkNumberStatus: (jid: string) => Promise<{ id?: { _serialized?: string } }>;
-      sendText: (to: string, text: string) => Promise<unknown>;
-    },
+  private async resolveLidToUs(
+    client: wppconnect.Whatsapp,
     sessionName: string,
     lidJid: string,
-    message: string,
-    isLidJid: (jid: string) => boolean,
-  ): Promise<ApiResponse | null> {
-    try {
-      const pnLidEntry = await client.getPnLidEntry(lidJid);
+  ): Promise<string | null> {
+    const { isLidJid } = await import('../utils/jid.utils');
 
-      // Prefer _serialized (full JID e.g. 554891426316@c.us) — wwebjs requires @c.us format, not pure digits
+    // Strategy 1: getPnLidEntry
+    try {
+      const clientExt = client as unknown as {
+        getPnLidEntry: (jid: string) => Promise<{
+          phoneNumber?: { id?: string; server?: string; _serialized?: string } | string;
+        }>;
+      };
+      const pnLidEntry = await clientExt.getPnLidEntry(lidJid);
       const rawPhoneNumber = pnLidEntry?.phoneNumber;
       let phoneJid: string | undefined =
         rawPhoneNumber == null
@@ -198,13 +191,10 @@ export class WhatsappMessagesService implements OnModuleInit {
             ? rawPhoneNumber
             : typeof rawPhoneNumber._serialized === 'string'
               ? rawPhoneNumber._serialized
-              : rawPhoneNumber._serialized != null
-                ? String(rawPhoneNumber._serialized)
-                : rawPhoneNumber.id != null
-                  ? String(rawPhoneNumber.id)
-                  : String(rawPhoneNumber);
+              : rawPhoneNumber.id != null
+                ? String(rawPhoneNumber.id)
+                : undefined;
 
-      // Defensive: ensure phoneJid has @c.us suffix when it's pure digits
       if (phoneJid && !phoneJid.includes('@')) {
         phoneJid = `${phoneJid}@c.us`;
       }
@@ -213,23 +203,39 @@ export class WhatsappMessagesService implements OnModuleInit {
         severity: LogSeverity.DEBUG,
         message: `[${sessionName}] getPnLidEntry resolved: ${phoneJid}`,
       });
+
       if (phoneJid && !isLidJid(phoneJid)) {
-        // Use checkNumberStatus before sendText (network query) to get valid targetJid, bypassing store-lookup issues
-        const check = await client.checkNumberStatus(phoneJid);
-        const targetJid = check?.id?._serialized ?? phoneJid;
-        const result = await client.sendText(targetJid, message);
-        return {
-          success: true,
-          message: 'Message sent successfully',
-          data: result,
-        };
+        return phoneJid;
       }
-    } catch (pnLidError) {
+    } catch (e) {
       this.logger.debug({
         severity: LogSeverity.DEBUG,
-        message: `[${sessionName}] trySendViaPnLidEntry inner error: ${pnLidError?.message}`,
+        message: `[${sessionName}] getPnLidEntry failed: ${(e as Error)?.message}`,
       });
     }
+
+    // Strategy 2: getContact
+    try {
+      const contact = await client.getContact(lidJid);
+      const rawContactId = contact?.id as { _serialized?: string } | string | undefined;
+      const resolvedId: string | undefined =
+        typeof rawContactId === 'string' ? rawContactId : rawContactId?._serialized;
+
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] getContact resolved: ${resolvedId}`,
+      });
+
+      if (resolvedId && typeof resolvedId === 'string' && !isLidJid(resolvedId)) {
+        return resolvedId;
+      }
+    } catch (e) {
+      this.logger.debug({
+        severity: LogSeverity.DEBUG,
+        message: `[${sessionName}] getContact failed: ${(e as Error)?.message}`,
+      });
+    }
+
     return null;
   }
 
