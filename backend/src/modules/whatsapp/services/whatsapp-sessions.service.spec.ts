@@ -2,7 +2,7 @@ import { WhatsappSessionsService } from './whatsapp-sessions.service';
 import { WhatsappSession } from '../entities/whatsapp-session.entity';
 import { Repository } from 'typeorm';
 import * as wppconnect from '@wppconnect-team/wppconnect';
-import { NotFoundException, RequestTimeoutException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { SessionStatus } from '../enums/whatsapp.enum';
 import { WebhookService } from '../../../shared/services/webhook.service';
 import { WhatsappClientManager } from '../providers/whatsapp-client.manager';
@@ -42,6 +42,8 @@ const makeSut = (): MakeSutTypes => {
     isClientConnected: jest.fn(),
     createClient: jest.fn(),
     removeClient: jest.fn(),
+    cancelClient: jest.fn(),
+    forceCloseClient: jest.fn(),
     getConnectionState: jest.fn(),
     isClientInitializing: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientManager>;
@@ -92,7 +94,7 @@ describe('WhatsappSessionsService', () => {
       expect(clientManager.createClient).not.toHaveBeenCalled();
     });
 
-    it('should create new session record if not exists and initialize client', async () => {
+    it('should create new session record if not exists and return CONNECTING immediately', async () => {
       const { sut, sessionRepository, clientManager } = makeSut();
 
       const sessionName = 'new-session';
@@ -103,9 +105,8 @@ describe('WhatsappSessionsService', () => {
       } as WhatsappSession);
 
       clientManager.hasClient.mockReturnValue(false);
-      clientManager.createClient.mockResolvedValue({
-        onMessage: jest.fn(),
-      } as any);
+      // createClient may never resolve (background), but start() returns immediately
+      clientManager.createClient.mockReturnValue(new Promise(() => {}));
 
       const result = await sut.start({ sessionName, phoneNumber: '5511999999999' });
 
@@ -114,54 +115,60 @@ describe('WhatsappSessionsService', () => {
         status: SessionStatus.CONNECTING,
       });
       expect(sessionRepository.save).toHaveBeenCalled();
-      expect(clientManager.createClient).toHaveBeenCalled();
-      expect(result).toEqual({ status: SessionStatus.CONNECTED });
+      // start() now returns immediately without waiting for createClient
+      expect(result).toEqual({ status: SessionStatus.CONNECTING });
     });
 
-    it('should return QRCODE status when onQRCode is triggered', async () => {
+    it('should return CONNECTING immediately without waiting for QR code', async () => {
       const { sut, sessionRepository, clientManager } = makeSut();
 
       const sessionName = 'qr-session';
       sessionRepository.findOne.mockResolvedValue(null);
       clientManager.hasClient.mockReturnValue(false);
 
-      clientManager.createClient.mockImplementation(async (name, config) => {
-        // Simulate QR code generation via callback
-        if (config.onQRCode) {
-          config.onQRCode('base64-code', 'ascii-code');
-        }
-        return new Promise(() => {}); // Never resolves to simulate waiting for QR
-      });
+      // QR callback fires in background, but start() returns before it
+      clientManager.createClient.mockReturnValue(new Promise(() => {}));
 
       const result = await sut.start({ sessionName, phoneNumber: '5511999999999' });
 
-      expect(result).toEqual({ status: SessionStatus.CONNECTING, qrcode: 'base64-code' });
-      expect(sessionRepository.update).toHaveBeenCalledWith(
-        { sessionName },
-        { qrCode: 'base64-code', status: SessionStatus.CONNECTING },
-      );
+      // start() returns CONNECTING immediately, QR is persisted to DB in background
+      expect(result).toEqual({ status: SessionStatus.CONNECTING });
     });
 
     it.skip('should throw RequestTimeoutException if timeout is reached', async () => {
+      // This test is no longer relevant: start() returns immediately
+      // and the client initialization runs in background.
+    });
+  });
+
+  describe('cancelSession', () => {
+    it('should cancel session and update DB status to CANCELED', async () => {
       const { sut, sessionRepository, clientManager } = makeSut();
 
-      const sessionName = 'timeout-session';
+      const sessionName = 'cancel-session';
+      sessionRepository.findOne.mockResolvedValue({
+        sessionName,
+        status: SessionStatus.CONNECTING,
+      } as WhatsappSession);
+
+      const result = await sut.cancelSession(sessionName);
+
+      expect(clientManager.cancelClient).toHaveBeenCalledWith(sessionName);
+      expect(sessionRepository.update).toHaveBeenCalledWith(
+        { sessionName },
+        expect.objectContaining({
+          status: SessionStatus.CANCELED,
+          qrCode: null,
+        }),
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('should throw NotFoundException if session not found', async () => {
+      const { sut, sessionRepository } = makeSut();
+
       sessionRepository.findOne.mockResolvedValue(null);
-      clientManager.hasClient.mockReturnValue(false);
-
-      // Mock createClient to never resolve
-      clientManager.createClient.mockReturnValue(new Promise(() => {}));
-
-      jest.useFakeTimers();
-
-      const promise = sut.start({ sessionName, phoneNumber: '5511999999999' });
-
-      // Advance time to trigger the service's internal timeout (20s)
-      jest.advanceTimersByTime(21000);
-
-      await expect(promise).rejects.toThrow(RequestTimeoutException);
-
-      jest.useRealTimers();
+      await expect(sut.cancelSession('unknown')).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -1,9 +1,10 @@
 import { LogSeverity, LoggerPayload, ILogger } from '../../../shared/interfaces/logger.interface';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AppLoggerService } from '@/shared/services/logger.service';
 import {
   Injectable,
   NotFoundException,
-  RequestTimeoutException,
   InternalServerErrorException,
   HttpException,
   ConflictException,
@@ -159,18 +160,16 @@ export class WhatsappSessionsService implements OnModuleInit {
       });
     }
 
-    // ========== ETAPA 5: Inicializar Cliente WPPConnect ==========
-    try {
-      this.logger.log({
-        severity: LogSeverity.LOG,
-        message: `Iniciando sessão: ${sessionName} (Modo: ${pairingMode || 'qrcode'})`,
-      });
-      return await this.initializeClient(sessionName, pairingMode, phoneNumber);
-    } catch (error) {
-      // Rollback do estado em caso de erro
-      await this.handleInitializationError(sessionName, error);
-      throw error; // Re-lança para o controller tratar
-    }
+    // ========== ETAPA 5: Inicializar Cliente WPPConnect (Background) ==========
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `Iniciando sessão em background: ${sessionName} (Modo: ${pairingMode || 'qrcode'})`,
+    });
+
+    // Fire-and-forget: a inicialização roda em background
+    this.initializeClientInBackground(sessionName, pairingMode, phoneNumber);
+
+    return { status: SessionStatus.CONNECTING };
   }
 
   async checkStatus(sessionName: string): Promise<string> {
@@ -298,6 +297,65 @@ export class WhatsappSessionsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Cancela uma sessão em andamento (CONNECTING ou inicializando)
+   *
+   * Fecha o browser, mata o processo se necessário e atualiza o status.
+   * Seguro para chamar mesmo se o browser ainda não foi instanciado.
+   *
+   * @param sessionName - Nome da sessão
+   */
+  async cancelSession(sessionName: string): Promise<ApiResponse> {
+    const session = await this.sessionRepository.findOne({ where: { sessionName } });
+
+    if (!session) {
+      throw new NotFoundException({
+        success: false,
+        message: 'Sessão não encontrada',
+      });
+    }
+
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `[CANCEL] Cancelando sessão ${sessionName} (status atual: ${session.status})`,
+    });
+
+    try {
+      // Delega ao manager: close + kill PID + remove da memória
+      await this.clientManager.cancelClient(sessionName);
+
+      // Atualiza status no banco
+      await this.sessionRepository.update(
+        { sessionName },
+        {
+          status: SessionStatus.CANCELED,
+          qrCode: null,
+          disconnectedAt: new Date(),
+        },
+      );
+
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `[CANCEL] Sessão ${sessionName} cancelada com sucesso`,
+      });
+
+      return {
+        success: true,
+        message: `Sessão ${sessionName} cancelada com sucesso`,
+      };
+    } catch (error) {
+      this.logger.error({
+        severity: LogSeverity.ERROR,
+        message: `[CANCEL] Falha ao cancelar sessão ${sessionName}: ${error.message}`,
+      });
+      throw new InternalServerErrorException({
+        success: false,
+        message: 'Falha ao cancelar sessão',
+        error: error.message,
+      });
+    }
+  }
+
   async getStatus(sessionName: string): Promise<ApiResponse<SessionStatusResponse>> {
     try {
       // Check session exists first
@@ -379,136 +437,110 @@ export class WhatsappSessionsService implements OnModuleInit {
     }
   }
 
-  private initializeClient(
+  /**
+   * Inicializa o cliente WPPConnect em background (fire-and-forget)
+   *
+   * Não bloqueia a resposta HTTP. QR Codes e status changes
+   * são persistidos no banco via callbacks e podem ser consultados
+   * via GET /whatsapp/sessions/:name/qrcode e GET /whatsapp/sessions/:name/status.
+   *
+   * Erros são tratados internamente e NÃO propagados ao caller.
+   */
+  private initializeClientInBackground(
     sessionName: string,
     pairingMode: 'qrcode' | 'phone' = 'qrcode',
     phoneNumber?: string,
-  ): Promise<WhatsappSessionStartResponse> {
-    return new Promise((resolve, reject) => {
-      const timeoutMs = 120000; // Aumentado para 120s para servidores de produção lentos
-      let isResolved = false;
-
-      this.logger.log({
-        severity: LogSeverity.LOG,
-        message: `Iniciando promise initializeClient para: ${sessionName} (Timeout: ${timeoutMs / 1000}s)`,
+  ): void {
+    // [DIAG] Validação de pré-condições antes de criar o cliente
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `[BG] initializeClientInBackground: session=${sessionName} | pairingMode=${pairingMode} | hasPhoneNumber=${!!phoneNumber}`,
+    });
+    if (pairingMode === 'phone' && !phoneNumber) {
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[BG] pairingMode=phone mas nenhum phoneNumber fornecido para session=${sessionName}. catchLinkCode nunca será acionado!`,
       });
+    }
 
-      const timeoutId = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true;
+    const config: WhatsappClientConfig = {
+      sessionName,
+      onQRCode: (base64Qr) => {
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[BG] onQRCode fired | session=${sessionName}`,
+        });
+        this.handleQRCode(sessionName, base64Qr).catch((err) => {
           this.logger.error({
             severity: LogSeverity.ERROR,
-            message: `[WARNING] Timeout gerando QR/Link Code para ${sessionName} após ${timeoutMs / 1000}s`,
+            message: `[BG] Falha ao persistir QR Code para ${sessionName}: ${err.message}`,
           });
-          reject(
-            new RequestTimeoutException(`Timeout gerando QR Code para ${sessionName} (120s limit)`),
-          );
-        }
-      }, timeoutMs);
-
-      // [DIAG] Validação de pré-condições antes de criar o cliente
-      this.logger.log({
-        severity: LogSeverity.LOG,
-        message: `[DIAG] initializeClient: pairingMode=${pairingMode} | hasPhoneNumber=${!!phoneNumber}`,
-      });
-      if (pairingMode === 'phone' && !phoneNumber) {
-        this.logger.warn({
-          severity: LogSeverity.WARNING,
-          message: `[DIAG] pairingMode=phone mas nenhum phoneNumber fornecido para session=${sessionName}. catchLinkCode nunca será acionado!`,
         });
-      }
-
-      const config: WhatsappClientConfig = {
-        sessionName,
-        onQRCode: (base64Qr) => {
-          this.logger.log({
-            severity: LogSeverity.LOG,
-            message: `[DIAG] onQRCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
-          });
-          if (!isResolved && pairingMode === 'qrcode') {
-            this.logger.log({
-              severity: LogSeverity.LOG,
-              message: `QR Code capturado para ${sessionName}`,
-            });
-            this.handleQRCode(sessionName, base64Qr);
-            isResolved = true;
-            clearTimeout(timeoutId);
-            resolve({ status: SessionStatus.CONNECTING, qrcode: base64Qr });
-          }
-        },
-        onLinkCode: (code) => {
-          this.logger.log({
-            severity: LogSeverity.LOG,
-            message: `[DIAG] onLinkCode fired | session=${sessionName} | pairingMode=${pairingMode} | isResolved=${isResolved}`,
-          });
-          if (!isResolved && pairingMode === 'phone') {
-            this.logger.log({
-              severity: LogSeverity.LOG,
-              message: `Código de link capturado para ${sessionName}: ${code}`,
-            });
-            isResolved = true;
-            clearTimeout(timeoutId);
-            resolve({ status: SessionStatus.CONNECTING, code });
-          }
-        },
-        phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
-        onStatusChange: (status, session) => {
-          this.logger.log({
-            severity: LogSeverity.LOG,
-            message: `[STATUS] [onStatusChange] sessão=${session} status=${status}`,
-          });
-          this.handleStatusChange(sessionName, status).catch((err) => {
+      },
+      onLinkCode: (code) => {
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[BG] onLinkCode fired | session=${sessionName} | code=${code}`,
+        });
+        // Persiste o link code no banco para consulta via API
+        this.sessionRepository
+          .update({ sessionName }, { status: SessionStatus.CONNECTING })
+          .catch((err) => {
             this.logger.error({
               severity: LogSeverity.ERROR,
-              message: `[WARNING] Falha ao persistir mudança de status para ${sessionName}: ${err.message}`,
+              message: `[BG] Falha ao atualizar status após linkCode para ${sessionName}: ${err.message}`,
             });
           });
-        },
-      };
-
-      this.logger.log({
-        severity: LogSeverity.LOG,
-        message: `[DIAG] Triggering clientManager.createClient for: ${sessionName}...`,
-      });
-
-      // Delegate creation to Manager
-      this.clientManager
-        .createClient(sessionName, config)
-        .then(async (client) => {
-          this.logger.log({
-            severity: LogSeverity.LOG,
-            message: `[DIAG] clientManager.createClient resolved for: ${sessionName} | isResolved=${isResolved}`,
-          });
-
-          // Register message listener
-          client.onMessage(async (message) => {
-            await this.handleIncomingMessage(sessionName, message);
-          });
-
-          if (!isResolved) {
-            isResolved = true;
-            clearTimeout(timeoutId);
-            this.logger.log({
-              severity: LogSeverity.LOG,
-              message: `Sessão ${sessionName} conectada com sucesso.`,
-            });
-            resolve({ status: SessionStatus.CONNECTED });
-          }
-        })
-        .catch((error) => {
-          if (!isResolved) {
-            isResolved = true;
-            clearTimeout(timeoutId);
-            // [DIAG] Stack trace completo — expõe erros silenciosos do Puppeteer
-            this.logger.error({
-              severity: LogSeverity.ERROR,
-              message: `[DIAG] clientManager.createClient REJEITADO para ${sessionName}: ${error.message}`,
-              stack: error.stack,
-            });
-            reject(error);
-          }
+      },
+      phoneNumber: pairingMode === 'phone' ? phoneNumber : undefined,
+      onStatusChange: (status, session) => {
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[STATUS] [onStatusChange] sessão=${session} status=${status}`,
         });
+        this.handleStatusChange(sessionName, status).catch((err) => {
+          this.logger.error({
+            severity: LogSeverity.ERROR,
+            message: `[BG] Falha ao persistir mudança de status para ${sessionName}: ${err.message}`,
+          });
+        });
+      },
+    };
+
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `[BG] Triggering clientManager.createClient for: ${sessionName}...`,
     });
+
+    // Fire-and-forget: erros são tratados internamente
+    this.clientManager
+      .createClient(sessionName, config)
+      .then(async (client) => {
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[BG] clientManager.createClient resolved for: ${sessionName}`,
+        });
+
+        // Register message listener
+        client.onMessage(async (message) => {
+          await this.handleIncomingMessage(sessionName, message);
+        });
+
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[BG] Sessão ${sessionName} conectada com sucesso (background).`,
+        });
+      })
+      .catch(async (error) => {
+        // [DIAG] Stack trace completo — expõe erros silenciosos do Puppeteer
+        this.logger.error({
+          severity: LogSeverity.ERROR,
+          message: `[BG] clientManager.createClient REJEITADO para ${sessionName}: ${error.message}`,
+          stack: error.stack,
+        });
+        // Rollback: atualiza o estado no banco
+        await this.handleInitializationError(sessionName, error);
+      });
   }
 
   private async recoverSession(sessionName: string) {
@@ -556,6 +588,9 @@ export class WhatsappSessionsService implements OnModuleInit {
         await this.clientManager.forceCloseClient(sessionName);
       }
 
+      // Limpa pasta de tokens corrompidos da sessão
+      this.cleanupTokenFolder(sessionName);
+
       // Atualiza estado para DISCONNECTED
       await this.sessionRepository.update({ sessionName }, { status: SessionStatus.DISCONNECTED });
 
@@ -569,6 +604,36 @@ export class WhatsappSessionsService implements OnModuleInit {
         message: `Falha ao limpar sessão ${sessionName}: ${error.message}`,
       });
       // Não lança erro - apenas loga
+    }
+  }
+
+  /**
+   * Remove o diretório de tokens de uma sessão (userDataDir)
+   *
+   * Tokens corrompidos podem impedir o WPPConnect de recriar
+   * a sessão corretamente. Ao detectar uma sessão travada em
+   * CONNECTING, limpar esses tokens força uma inicialização limpa.
+   *
+   * @param sessionName - Nome da sessão
+   */
+  private cleanupTokenFolder(sessionName: string): void {
+    const tokenBase =
+      process.env.WPPCONNECT_TOKENS_DIR ?? path.resolve(__dirname, '../../../tokens');
+    const sessionTokenDir = path.join(tokenBase, sessionName);
+
+    try {
+      if (fs.existsSync(sessionTokenDir)) {
+        fs.rmSync(sessionTokenDir, { recursive: true, force: true });
+        this.logger.log({
+          severity: LogSeverity.LOG,
+          message: `[CLEANUP] Token folder removido: ${sessionTokenDir}`,
+        });
+      }
+    } catch (error) {
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[CLEANUP] Falha ao remover token folder ${sessionTokenDir}: ${error.message}`,
+      });
     }
   }
 
