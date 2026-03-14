@@ -321,6 +321,15 @@ export class WhatsappSessionsService implements OnModuleInit {
     });
 
     try {
+      const clientInitializing = this.clientManager.isClientInitializing(sessionName);
+
+      if (!clientInitializing) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Sessão não encontrada',
+        });
+      }
+
       // Delega ao manager: close + kill PID + remove da memória
       await this.clientManager.cancelClient(sessionName);
 
