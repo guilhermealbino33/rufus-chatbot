@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ChatbotService } from '../src/modules/chatbot/chatbot.service';
+import { ChatbotService } from '../src/modules/chatbot/services/chatbot.service';
 import { WebhookService } from '../src/shared/services/webhook.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatbotUser } from '../src/modules/chatbot/entities/chatbot-user.entity';
 import { FlowLog } from '../src/modules/chatbot/entities/flow-log.entity';
-import { ChatbotUserService } from '../src/modules/chatbot/chatbot-user.service';
-import { FUNNEL_TREE } from '../src/modules/chatbot/funnel.config';
+import { ChatbotUserService } from '../src/modules/chatbot/services/chatbot-user.service';
+import { FUNNEL_TREE } from '../src/modules/chatbot/config/funnel.config';
 import { ChatbotState } from '../src/modules/chatbot/enums';
 
 // Mock WebhookService

@@ -45,7 +45,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up --service rufus-chatbot-api -d --config ../.railway/workflows/deploy.yml
+        run: railway up --service rufus-chatbot-api -d
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: ./backend

@@ -1,6 +1,7 @@
 import { WhatsappClientManager } from './whatsapp-client.manager';
 import { WhatsappClientFactory } from './whatsapp-client.factory';
 import * as wppconnect from '@wppconnect-team/wppconnect';
+import { AppLoggerService } from '@/shared/services/logger.service';
 
 interface MakeSutTypes {
   sut: WhatsappClientManager;
@@ -12,15 +13,15 @@ const makeSut = (): MakeSutTypes => {
     create: jest.fn(),
   } as unknown as jest.Mocked<WhatsappClientFactory>;
 
-  const sut = new WhatsappClientManager(factory);
-
-  // Mock logger
-  (sut as any).logger = {
+  const loggerService = {
     log: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
     debug: jest.fn(),
-  };
+    forContext: jest.fn().mockReturnThis(),
+  } as unknown as AppLoggerService;
+
+  const sut = new WhatsappClientManager(factory, loggerService);
 
   return { sut, factory };
 };
@@ -65,7 +66,9 @@ describe('WhatsappClientManager', () => {
       expect(factory.create).toHaveBeenCalledTimes(1);
       expect(result).toBe(client);
       expect((sut as any).logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(`Client for ${sessionName} already exists`),
+        expect.objectContaining({
+          message: expect.stringContaining(`Client for ${sessionName} already exists`),
+        }),
       );
     });
   });

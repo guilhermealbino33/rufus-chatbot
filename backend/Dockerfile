@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
+ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/tokens
 
 WORKDIR /usr/src/app
 
@@ -94,7 +94,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/wpp-sessions
+ENV WPPCONNECT_TOKENS_DIR=/usr/src/app/tokens
 ENV NODE_ENV=production
 
 WORKDIR /usr/src/app
@@ -104,7 +104,7 @@ COPY --from=builder /usr/src/app/backend/dist ./dist
 COPY --from=builder /usr/src/app/backend/package.json ./package.json
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 
-RUN mkdir -p /usr/src/app/wpp-sessions && chown -R node:node /usr/src/app
+RUN mkdir -p /usr/src/app/tokens && chown -R node:node /usr/src/app
 USER node
 
 EXPOSE 3000

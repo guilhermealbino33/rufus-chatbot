@@ -2,6 +2,7 @@ import { WhatsappClientFactory } from './whatsapp-client.factory';
 import * as wppconnect from '@wppconnect-team/wppconnect';
 import { InternalServerErrorException } from '@nestjs/common';
 import { DEFAULT_WHATSAPP_CONFIG } from '../config/whatsapp-client.config';
+import { AppLoggerService } from '@/shared/services/logger.service';
 
 jest.mock('@wppconnect-team/wppconnect', () => ({
   create: jest.fn(),
@@ -13,13 +14,15 @@ interface MakeSutTypes {
 
 const makeSut = (): MakeSutTypes => {
   const configService = { get: jest.fn(() => undefined) } as any;
-  const sut = new WhatsappClientFactory(configService);
 
-  (sut as any).logger = {
+  const loggerService = {
+    forContext: jest.fn().mockReturnThis(),
     log: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
-  };
+  } as unknown as AppLoggerService;
+
+  const sut = new WhatsappClientFactory(configService, loggerService);
 
   return { sut };
 };

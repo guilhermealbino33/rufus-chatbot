@@ -1,5 +1,17 @@
 .env
+.env.*
 dist
 node_modules
 collection.json
 .eslintcache
+
+# WPPConnect — tokens de sessão WhatsApp (credenciais, NUNCA commitar)
+tokens/
+**/tokens/
+
+# Logs
+*.log
+logs/
+
+# Cobertura de testes
+coverage/

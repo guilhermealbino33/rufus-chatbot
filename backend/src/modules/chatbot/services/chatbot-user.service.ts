@@ -3,8 +3,8 @@ import { AppLoggerService } from '@/shared/services/logger.service';
 import { ILogger, LogSeverity } from '@/shared/interfaces/logger.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ChatbotUser } from './entities/chatbot-user.entity';
-import { ChatbotState } from './enums/chatbot-state.enum';
+import { ChatbotUser } from '../entities/chatbot-user.entity';
+import { ChatbotState } from '../enums/chatbot-state.enum';
 
 @Injectable()
 export class ChatbotUserService {
@@ -22,7 +22,11 @@ export class ChatbotUserService {
    * Retrieves an existing user by phone number or creates a new one.
    * This ensures we always have a user context to work with.
    */
-  async getOrCreate(phoneNumber: string, name?: string): Promise<ChatbotUser> {
+  async getOrCreate(
+    phoneNumber: string,
+    name?: string,
+    lidIdentifier?: string,
+  ): Promise<ChatbotUser> {
     let user = await this.chatbotUserRepository.findOne({ where: { phoneNumber } });
 
     if (!user) {
@@ -33,14 +37,24 @@ export class ChatbotUserService {
       user = this.chatbotUserRepository.create({
         phoneNumber,
         name,
+        lidIdentifier,
         currentStep: ChatbotState.START,
         contextData: {},
       });
       await this.chatbotUserRepository.save(user);
-    } else if (name && !user.name) {
-      // Update name if provided and not already set
-      user.name = name;
-      await this.chatbotUserRepository.save(user);
+    } else {
+      let changed = false;
+      if (name && !user.name) {
+        user.name = name;
+        changed = true;
+      }
+      if (lidIdentifier && !user.lidIdentifier) {
+        user.lidIdentifier = lidIdentifier;
+        changed = true;
+      }
+      if (changed) {
+        await this.chatbotUserRepository.save(user);
+      }
     }
 
     return user;
@@ -65,5 +79,18 @@ export class ChatbotUserService {
     user.lastInteractionAt = new Date(); // Reset inactivity timer? This updates the interaction time.
 
     return this.chatbotUserRepository.save(user);
+  }
+
+  /**
+   * Finds users inactive beyond the given threshold, excluding START and HANDOFF_ACTIVE.
+   * Used by the session expiry cron to clear stale conversations.
+   */
+  async findInactiveUsers(before: Date): Promise<ChatbotUser[]> {
+    return this.chatbotUserRepository
+      .createQueryBuilder('user')
+      .where('user.currentStep != :start', { start: ChatbotState.START })
+      .andWhere('user.currentStep != :handoff', { handoff: ChatbotState.HANDOFF_ACTIVE })
+      .andWhere('user.lastInteractionAt < :before', { before })
+      .getMany();
   }
 }

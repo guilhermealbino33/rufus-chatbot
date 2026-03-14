@@ -1,4 +1,5 @@
 import { Message } from '@wppconnect-team/wppconnect';
+import * as path from 'path';
 
 /**
  * Configuração para criação de clientes WPPConnect
@@ -38,7 +39,7 @@ export interface WhatsappClientConfig {
   /**
    * Diretório onde os tokens de sessão serão armazenados.
    * CRÍTICO para produção: deve apontar para um volume persistido.
-   * Padrão: process.env.WPPCONNECT_TOKENS_DIR ?? './wpp-sessions'
+   * Padrão: process.env.WPPCONNECT_TOKENS_DIR ?? './tokens'
    */
   folderNameToken?: string;
 
@@ -81,7 +82,7 @@ export const DEFAULT_WHATSAPP_CONFIG: Partial<WhatsappClientConfig> = {
   logQR: false,
   autoClose: 0,
   // Diretório de tokens lido do env para facilitar o mapeamento de volumes
-  folderNameToken: process.env.WPPCONNECT_TOKENS_DIR ?? './wpp-sessions',
+  folderNameToken: process.env.WPPCONNECT_TOKENS_DIR ?? path.resolve(__dirname, '../../../tokens'),
   // 120 s é um ponto de partida seguro para servidores mais lentos
   // waitForLogin é boolean no WPPConnect: true = aguarda login antes de resolver create()
   // (o timeout interno pode ser controlado via autoClose se necessário)

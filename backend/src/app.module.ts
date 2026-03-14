@@ -7,7 +7,6 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { HealthModule } from './modules/health';
 import { UsersModule } from './modules/users/users.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
-import { WebhookService } from './shared/services/webhook.service';
 import { ExistsConstraint } from './shared/common/decorators/exists-constraint.decorator';
 import { SharedModule } from './shared/shared.module';
 import { LoggerModule } from './shared/logger.module';
@@ -33,6 +32,6 @@ import { AppDataSource } from './crosscutting/database/data-source';
     SharedModule,
   ],
   controllers: [],
-  providers: [WebhookService, ExistsConstraint],
+  providers: [ExistsConstraint],
 })
 export class AppModule {}

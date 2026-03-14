@@ -244,6 +244,88 @@ export class WhatsappClientManager implements OnModuleDestroy {
   }
 
   /**
+   * Cancela uma sessão em inicialização ou conectada,
+   * matando o processo do browser se necessário.
+   *
+   * Diferente de forceCloseClient, este método:
+   * 1. Remove a marca de "initializing" se existir
+   * 2. Tenta fechar graciosamente via client.close()
+   * 3. Se falhar, mata o processo do browser via PID
+   * 4. Garante que não fiquem processos Chromium órfãos
+   *
+   * @param sessionName - Nome da sessão
+   */
+  async cancelClient(sessionName: string): Promise<void> {
+    // Remove marca de "initializing" para desbloquear futuras tentativas
+    if (this.initializingClients.has(sessionName)) {
+      this.unmarkAsInitializing(sessionName);
+    }
+
+    const client = this.clients.get(sessionName);
+
+    if (!client) {
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[CANCEL] No client found in memory for ${sessionName}`,
+      });
+      return;
+    }
+
+    this.logger.log({
+      severity: LogSeverity.LOG,
+      message: `[CANCEL] Cancelling session ${sessionName}...`,
+    });
+
+    try {
+      // Estratégia 1: Close gracioso com timeout curto (3s)
+      await Promise.race([
+        client.close(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000)),
+      ]);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `[CANCEL] Graceful close succeeded for ${sessionName}`,
+      });
+    } catch (closeError) {
+      this.logger.warn({
+        severity: LogSeverity.WARNING,
+        message: `[CANCEL] Graceful close failed for ${sessionName}: ${closeError.message}. Killing browser PID...`,
+      });
+
+      // Estratégia 2: Matar o processo do browser via PID
+      try {
+        const page = (client as any).page;
+        const browser = page?.browser?.() ?? (client as any).browser;
+        const browserProcess = browser?.process?.();
+
+        if (browserProcess?.pid) {
+          this.logger.log({
+            severity: LogSeverity.LOG,
+            message: `[CANCEL] Killing browser PID ${browserProcess.pid} for ${sessionName}`,
+          });
+          process.kill(browserProcess.pid, 'SIGKILL');
+        } else {
+          this.logger.warn({
+            severity: LogSeverity.WARNING,
+            message: `[CANCEL] Could not find browser PID for ${sessionName}. Process may be orphaned.`,
+          });
+        }
+      } catch (killError) {
+        this.logger.error({
+          severity: LogSeverity.ERROR,
+          message: `[CANCEL] Failed to kill browser process for ${sessionName}: ${killError.message}`,
+        });
+      }
+    } finally {
+      this.clients.delete(sessionName);
+      this.logger.log({
+        severity: LogSeverity.LOG,
+        message: `[CANCEL] Client removed from memory: ${sessionName} (Remaining: ${this.clients.size})`,
+      });
+    }
+  }
+
+  /**
    * Verifica se o cliente está conectado ao WhatsApp
    *
    * Remove automaticamente clientes "mortos" (que lançam erro ao verificar status).

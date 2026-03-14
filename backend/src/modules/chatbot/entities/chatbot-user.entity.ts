@@ -8,6 +8,12 @@ export class ChatbotUser extends BaseEntity {
   @Column({ unique: true })
   phoneNumber: string;
 
+  /**
+   * @todo: analisar se esta coluna é necessária
+   */
+  @Column({ nullable: true, name: 'lid_identifier' })
+  lidIdentifier?: string; // e.g. "257431800180973@lid" — for LID→@c.us reverse mapping (incoming from FB/IG ads)
+
   @Column({ nullable: true })
   name: string;
 
